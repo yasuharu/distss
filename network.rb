@@ -19,7 +19,7 @@ class NetworkThreadInfo
 	attr_accessor :recv_queue
 	attr_accessor :recv_queue_mutex
 
-	# 終了時のフラグ
+	# @brief 終了時のフラグ
 	attr_accessor :shutdown
 
 	def initialize(socket)
@@ -88,23 +88,26 @@ class RecvThread
 
 		while true
 			# メッセージの到着チェック
-			# select(info.socket).each do |socket|
-				begin
-					buf = @info.socket.recv(BUFFER_SIZE)
-				rescue => e
-					p e
-					break
-				end
+			begin
+				buf = @info.socket.recv(BUFFER_SIZE)
+			rescue => e
+				p e
+				break
+			end
 
-				packet = Packet.new
-				packet.message = buf
+			# メッセージの長さが0の場合も終了
+			if buf.size == 0
+				break
+			end
 
-				puts "  * [recv] " + packet.message
+			packet = Packet.new
+			packet.message = buf
 
-				@info.recv_queue_mutex.synchronize do
-					@info.recv_queue.push(packet)
-				end
-			# end
+			puts "  * [recv] " + packet.message
+
+			@info.recv_queue_mutex.synchronize do
+				@info.recv_queue.push(packet)
+			end
 
 			# サーバの終了チェック
 			if @info.shutdown

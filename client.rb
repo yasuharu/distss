@@ -7,15 +7,16 @@ SERVER_HOST = "127.0.0.1"
 BUFFER_SIZE = 1024
 
 class DistssClient
-	attr_accessor :node_list
-
 	def initialize()
 	end
 
 	def run()
 		puts " * connect server begin"
 
-		@socket = TCPSocket.open(SERVER_HOST, SERVER_PORT)
+		server_ip = IPSocket.getaddress(SERVER_HOST)
+
+		puts " * connecting to " + SERVER_HOST + "(" + server_ip + ")"
+		@socket = TCPSocket.open(server_ip, SERVER_PORT)
 		@info   = NetworkThreadInfo.new(@socket)
 
 		puts " * connect success"

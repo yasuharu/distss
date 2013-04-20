@@ -6,6 +6,13 @@ require "network.rb"
 SERVER_PORT = 20000
 BUFFER_SIZE = 1024
 
+class NodeInfo
+	attr_accessor :tinfo
+
+	# @brief 認証済みかどうか
+	attr_accessor :authed
+end
+
 class DistssServer
 	attr_accessor :node_list
 
@@ -16,32 +23,22 @@ class DistssServer
 	def run()
 		puts " * starting server"
 
-		@server  = TCPServer.open(SERVER_PORT)
-		@servers = [@server]
-
+		@server     = TCPServer.open(SERVER_PORT)
 		@controller = Thread.new { ServerControllerThread.new(@node_list).run }
 
 		while true
 			# クライアントの接続を待ち受け
-#			puts " * waiting server"
-#			begin
-#				slist = select(@servers)
-#			rescue
-#				p e
-#				break
-#			end
-#
-#			puts " * connecting server"
-#			slist.each do |server|
 			puts " * waiting server"
 			socket = @server.accept
 
 			puts " * connecting client"
 
 			# 接続したクライアントのスレッドを生成
-			info = NetworkThreadInfo.new(socket)
+			tinfo = NetworkThreadInfo.new(socket)
+			ninfo = NodeInfo.new()
+			ninfo.tinfo = tinfo
 
-			@node_list.push(info)
+			@node_list.push(ninfo)
 
 #			end
 		end
@@ -86,6 +83,10 @@ class ServerControllerThread
 		end
 	end
 
+	# @brief リクエストの処理
+	def reply()
+	end
+
 	def run()
 		puts " * create ServerControllerThread"
 
@@ -95,15 +96,14 @@ class ServerControllerThread
 
 		while true
 			@node_list.each do |node|
-				while !node.recv_queue.empty?
-					# リクエストの処理
+				while !node.tinfo.recv_queue.empty?
 					request = nil
-					node.recv_queue_mutex.synchronize do
-						request = node.recv_queue.pop()
+					node.tinfo.recv_queue_mutex.synchronize do
+						request = node.tinfo.recv_queue.pop()
 					end
 
 					reply = Packet.new
-					reply.message = "none"
+					reply.message = ""
 
 					# 動画の追加
 					# request : add <コマンド文字列>
@@ -131,7 +131,7 @@ class ServerControllerThread
 
 							# 必要な情報をセット
 							item.proceed   = true
-							item.processer = node
+							item.processer = node.tinfo
 						end
 					end
 
@@ -158,8 +158,8 @@ class ServerControllerThread
 						@wait_queue.push(item)
 					end
 
-					node.send_queue_mutex.synchronize do
-						node.send_queue.push(reply)
+					node.tinfo.send_queue_mutex.synchronize do
+						node.tinfo.send_queue.push(reply)
 					end
 				end
 			end
