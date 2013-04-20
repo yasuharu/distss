@@ -30,7 +30,7 @@ class NetworkClient
 			return false
 		end
 
-		@info   = NetworkThreadInfo.new(@socket)
+		@info = NetworkThreadInfo.new(@socket)
 
 		puts " * connect success"
 
@@ -58,6 +58,14 @@ class NetworkClient
 		end
 		return packet.message
 	end
+
+	def close
+		# @brief スレッドを止める
+		@info.shutdown = true
+		@info.socket.close
+		@info.send_thread.join
+		@info.recv_thread.join
+	end
 end
 
 class NetworkServer
@@ -70,6 +78,17 @@ class NetworkServer
 		@nlist     = Array.new
 		@port      = port
 		@onConnect = nil
+	end
+
+	def close
+		# @brief スレッドを止める
+		@nlist.each do |info|
+			info.shutdown = true
+			info.socket.close
+
+			info.send_thread.join
+			info.recv_thread.join
+		end
 	end
 
 	def send(node, msg)
@@ -207,7 +226,28 @@ class RecvThread
 		puts " * create RecvThread"
 
 		while true
+			# サーバの終了チェック
+			if @info.shutdown
+				break
+			end
+
 			# メッセージの到着チェック
+			recved = false
+			begin
+				ret = IO::select([@info.socket])
+				if(ret[0].length != 0)
+					recved = true
+				end
+			rescue => e
+				p e
+				break
+			end
+
+			# メッセージがない場合は繰り返し
+			if !recved
+				next
+			end
+
 			begin
 				buf = @info.socket.recv(BUFFER_SIZE)
 			rescue => e
@@ -227,11 +267,6 @@ class RecvThread
 
 			@info.recv_queue_mutex.synchronize do
 				@info.recv_queue.push(packet)
-			end
-
-			# サーバの終了チェック
-			if @info.shutdown
-				break
 			end
 		end
 
