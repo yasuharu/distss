@@ -7,6 +7,9 @@ CLIENT_CHECK_TIME = 3
 CLIENT_CHECK_RETRY_TIME = 1
 CLIENT_TIMEOUT    = 5
 
+ITEM_CHECK_TIME = 1
+ITEM_CHECK_RETRY_TIME = 1
+
 class NodeInfo
 	attr_accessor :tinfo
 
@@ -14,10 +17,11 @@ class NodeInfo
 	attr_accessor :authed
 
 	# @brief 最終応答確認時刻
-	attr_accessor :last_alive
+	attr_accessor :last_alive_time
 
-	# @brief 
-	attr_accessor :ping_check_time
+	# @brief 最後にpingを実行した時間
+	#        (あくまでも，実行した時間なので，返事が返ってきた時間ではない)
+	attr_accessor :alive_check_time
 end
 
 class ItemInfo
@@ -33,10 +37,21 @@ class ItemInfo
 	# 実行中のコマンドを判断するためのID
 	attr_accessor :id
 
+	# 最後にステータスをチェックした時間
+	attr_accessor :last_status_time
+
+	# 最後にステータスチェックのリクエストを送った時間
+	attr_accessor :status_check_time
+
+	# 現在の状況(0 - 100のパーセント値)
+	attr_accessor :status
+
 	def initialize(command, id)
 		@command = command
 		@proceed = false
 		@id      = id
+		@last_status_time = Time.now
+		@status_check_time = Time.now
 	end
 end
 
@@ -56,11 +71,20 @@ class DistssServer
 		end
 	end
 
+	def DumpItem()
+		puts "----- dump -----"
+		@item_list.each do |item|
+			printf("id = %d, command = %s, st = %d\n",
+				item.id, item.command, item.proceed)
+		end
+		puts "-----"
+	end
+
 	def onConnect(tinfo)
 		tinfo.private            = NodeInfo.new
 		tinfo.private.authed     = false
-		tinfo.private.last_alive = Time.now
-		tinfo.private.ping_check_time = Time.now
+		tinfo.private.last_alive_time = Time.now
+		tinfo.private.alive_check_time = Time.now
 	end
 
 	def run()
@@ -79,7 +103,7 @@ class DistssServer
 			@node_list.each do |node|
 				while @server.recv?(node)
 					# 最終応答時間を修正
-					node.private.last_alive = Time.now
+					node.private.last_alive_time = Time.now
 
 					request = @server.recv(node)
 					reply   = "none"
@@ -121,8 +145,12 @@ class DistssServer
 						id   = $1.to_i
 						item = FindItemById(id)
 
-						# 終了したので削除
-						@item_list.delete(item)
+						if item.processer != node
+							puts "[error] another node send finished."
+						else
+							# 終了したので削除
+							@item_list.delete(item)
+						end
 					end
 
 					# 動画のエラー
@@ -141,17 +169,42 @@ class DistssServer
 				end
 
 				# クライアントが一定時間通信のない場合 ping を送信
-				if (Time.now - node.private.last_alive) > CLIENT_CHECK_TIME
+				if (Time.now - node.private.last_alive_time) > CLIENT_CHECK_TIME
 					# 最後に ping を送った時から一定時間後に再送信
-					if (Time.now - node.private.ping_check_time) > CLIENT_CHECK_RETRY_TIME
-						node.private.ping_check_time = Time.now
+					if (Time.now - node.private.alive_check_time) > CLIENT_CHECK_RETRY_TIME
+						node.private.alive_check_time = Time.now
 						@server.send(node, "ping")
 					end
 				end
 
 				# クライアントの接続がタイムアウトした場合
-				if (Time.now - node.private.last_alive) > CLIENT_TIMEOUT
-					@server.close(node)
+				if (Time.now - node.private.last_alive_time) > CLIENT_TIMEOUT
+					@server.disconnect(node)
+				end
+			end
+
+			# アイテムの状態をチェックする
+			@item_list.each do |item|
+				# 実行中か？
+				if item.proceed == false
+					next
+				end
+
+				# 実行中の場合は一定期間ごとにステータスを求める
+				if (Time.now - item.last_status_time) > ITEM_CHECK_TIME
+					if (Time.now - item.last_status_time) > ITEM_CHECK_RETRY_TIME
+						msg = "status " + item.id.to_s
+						item.last_status_time = Time.now
+
+						@server.send(item.processer, msg)
+					end
+				end
+
+				# 一定時間以上返事を返していない場合，アプリケーションが落ちたと判断する
+				# （ただし，ノード自体が落ちたとは判断をしない．ノードはpingの時間から判定をする）
+				if (Time.now - item.last_status_time) > ITEM_TIMEOUT
+					item.proceed = false
+					@wait_queue.push(item)
 				end
 			end
 		end
