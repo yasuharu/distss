@@ -96,7 +96,7 @@ class NetworkServer
 		end
 	end
 
-	def close(info)
+	def disconnect(info)
 		info.shutdown = true
 		info.socket.close
 
