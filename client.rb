@@ -1,43 +1,30 @@
 
 require "socket"
-require "network.rb"
+require "network"
 
 SERVER_PORT = 20000
 SERVER_HOST = "127.0.0.1"
-BUFFER_SIZE = 1024
 
 class DistssClient
 	def initialize()
 	end
 
 	def run()
-		puts " * connect server begin"
-
-		server_ip = IPSocket.getaddress(SERVER_HOST)
-
-		puts " * connecting to " + SERVER_HOST + "(" + server_ip + ")"
-		@socket = TCPSocket.open(server_ip, SERVER_PORT)
-		@info   = NetworkThreadInfo.new(@socket)
-
-		puts " * connect success"
+		@client = NetworkClient.new(SERVER_HOST, SERVER_PORT)
+		if(!@client.connect)
+			return
+		end
 
 		while line = STDIN.gets
-			packet = Packet.new
-			packet.message = line
+			@client.send(line)
 
-			puts "  * [input] " + packet.message
+			puts "  * [input] " + line
 
-			@info.send_queue_mutex.synchronize do
-				@info.send_queue.push(packet)
+			while(!@client.recv?)
 			end
 
-			while @info.recv_queue.empty?
-			end
-
-			@info.recv_queue_mutex.synchronize do
-				packet = @info.recv_queue.pop()
-				puts packet.message
-			end
+			msg = @client.recv
+			puts msg
 		end
 	end
 end

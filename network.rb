@@ -1,9 +1,126 @@
 
+require "socket"
 require "thread"
+
+BUFFER_SIZE = 1024
 
 # @brief 送受信単位のデータを格納する
 class Packet
 	attr_accessor :message
+end
+
+class NetworkClient
+	def initialize(host, port)
+		@host = host
+		@port = port
+	end
+
+	# @brief 接続を開始する
+	# @ret true  成功
+	# @ret false 失敗
+	def connect
+		begin
+			puts " * connect server begin"
+			server_ip = IPSocket.getaddress(@host)
+
+			puts " * connecting to " + @host + "(" + server_ip + ")"
+			@socket = TCPSocket.open(server_ip, @port)
+		rescue => e
+			p e
+			return false
+		end
+
+		@info   = NetworkThreadInfo.new(@socket)
+
+		puts " * connect success"
+
+		return true
+	end
+
+	def send(msg)
+		packet         = Packet.new
+		packet.message = msg
+
+		@info.send_queue_mutex.synchronize do
+			@info.send_queue.push(packet)
+		end
+	end
+
+	# @ret true 受信可能
+	def recv?
+		return !@info.recv_queue.empty?
+	end
+
+	def recv
+		packet = nil
+		@info.recv_queue_mutex.synchronize do
+			packet = @info.recv_queue.pop()
+		end
+		return packet.message
+	end
+end
+
+class NetworkServer
+	attr_accessor :nlist
+
+	# @brief 接続時のコールバック関数
+	attr_accessor :onConnect
+
+	def initialize(port)
+		@nlist     = Array.new
+		@port      = port
+		@onConnect = nil
+	end
+
+	def send(node, msg)
+		packet         = Packet.new
+		packet.message = msg
+
+		node.send_queue_mutex.synchronize do
+			node.send_queue.push(packet)
+		end
+	end
+
+	def recv?(node)
+		return !node.recv_queue.empty?
+	end
+
+	def recv(node)
+		packet = nil
+
+		node.recv_queue_mutex.synchronize do
+			packet = node.recv_queue.pop()
+		end
+
+		return packet.message
+	end
+
+	def run()
+		puts " * starting server"
+
+		@server = TCPServer.open(@port)
+
+		while true
+			# クライアントの接続を待ち受け
+			puts " * waiting server"
+			socket = @server.accept
+
+			puts " * connecting client"
+
+			# 接続したクライアントのスレッドを生成
+			tinfo = NetworkThreadInfo.new(socket)
+			if(@onConnect)
+				@onConnect.call(tinfo)
+			end
+
+
+			@nlist.push(tinfo)
+
+#			end
+		end
+
+		puts " * end server"
+	end
 end
 
 class NetworkThreadInfo
@@ -21,6 +138,9 @@ class NetworkThreadInfo
 
 	# @brief 終了時のフラグ
 	attr_accessor :shutdown
+
+	# @brief スレッドに付随する情報を保持する
+	attr_accessor :private
 
 	def initialize(socket)
 		@socket     = socket
