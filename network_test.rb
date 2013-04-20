@@ -51,12 +51,13 @@ class NetworkTest < Test::Unit::TestCase
 #		assert_equal(ret, false)
 #	end
 
-	# @brief 接続を閉じる
+	# @brief 通常通り接続して，接続を解除する
 	def test_disconnect
 		@client = connect
 		@client.close
 	end
 
+	# @brief 1セッションでサーバ側を落とす
 	def test_server_disconnect
 		client = connect
 		assert_not_equal(client, nil)
@@ -66,6 +67,7 @@ class NetworkTest < Test::Unit::TestCase
 		client.close
 	end
 
+	# @brief 複数のセッションを接続する
 	def test_alot_connect
 		clients = Array.new
 		num     = 10
@@ -85,6 +87,7 @@ class NetworkTest < Test::Unit::TestCase
 		end
 	end
 
+	# @brief 複数のセッションを接続して，サーバ側を落とす
 	def test_alot_server_disconnect
 		clients = Array.new
 		num     = 10
@@ -107,6 +110,28 @@ class NetworkTest < Test::Unit::TestCase
 	end
 
 	# @brief 連続でメッセージを送ってみる
+	def test_send_message
+		clients = Array.new
+		num     = 3
+
+		for i in 0..num do
+			ret = connect
+			assert_not_equal(ret, nil)
+
+			clients.push(ret)
+		end
+
+		for j in 0..200 do
+			for i in 0..num do
+				client = clients[i]
+				if client != nil
+					client.send("hogehoge")
+				end
+			end
+		end
+
+		sleep 3
+	end
 
 	def teardown
 	end

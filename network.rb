@@ -66,6 +66,11 @@ class NetworkClient
 		@info.send_thread.join
 		@info.recv_thread.join
 	end
+
+	# @FIXME 名前は変えたほうが良いかも．．．
+	def lost?
+		return @info.shutdown
+	end
 end
 
 class NetworkServer
@@ -89,6 +94,16 @@ class NetworkServer
 			info.send_thread.join
 			info.recv_thread.join
 		end
+	end
+
+	def close(info)
+		info.shutdown = true
+		info.socket.close
+
+		info.send_thread.join
+		info.recv_thread.join
+
+		@nlist.delete(info)
 	end
 
 	def send(node, msg)
@@ -131,7 +146,6 @@ class NetworkServer
 			if(@onConnect)
 				@onConnect.call(tinfo)
 			end
-
 
 			@nlist.push(tinfo)
 

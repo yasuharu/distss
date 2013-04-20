@@ -3,12 +3,21 @@ require "thread"
 require "network"
 
 SERVER_PORT = 20000
+CLIENT_CHECK_TIME = 3
+CLIENT_CHECK_RETRY_TIME = 1
+CLIENT_TIMEOUT    = 5
 
 class NodeInfo
 	attr_accessor :tinfo
 
 	# @brief 認証済みかどうか
 	attr_accessor :authed
+
+	# @brief 最終応答確認時刻
+	attr_accessor :last_alive
+
+	# @brief 
+	attr_accessor :ping_check_time
 end
 
 class ItemInfo
@@ -48,6 +57,10 @@ class DistssServer
 	end
 
 	def onConnect(tinfo)
+		tinfo.private            = NodeInfo.new
+		tinfo.private.authed     = false
+		tinfo.private.last_alive = Time.now
+		tinfo.private.ping_check_time = Time.now
 	end
 
 	def run()
@@ -65,6 +78,9 @@ class DistssServer
 		while true
 			@node_list.each do |node|
 				while @server.recv?(node)
+					# 最終応答時間を修正
+					node.private.last_alive = Time.now
+
 					request = @server.recv(node)
 					reply   = "none"
 
@@ -122,6 +138,20 @@ class DistssServer
 					end
 
 					@server.send(node, reply)
+				end
+
+				# クライアントが一定時間通信のない場合 ping を送信
+				if (Time.now - node.private.last_alive) > CLIENT_CHECK_TIME
+					# 最後に ping を送った時から一定時間後に再送信
+					if (Time.now - node.private.ping_check_time) > CLIENT_CHECK_RETRY_TIME
+						node.private.ping_check_time = Time.now
+						@server.send(node, "ping")
+					end
+				end
+
+				# クライアントの接続がタイムアウトした場合
+				if (Time.now - node.private.last_alive) > CLIENT_TIMEOUT
+					@server.close(node)
 				end
 			end
 		end

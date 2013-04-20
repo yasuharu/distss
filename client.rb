@@ -16,6 +16,11 @@ class DistssClient
 		end
 
 		while line = STDIN.gets
+			if @client.lost?
+				puts " * shutdown client"
+				break
+			end
+
 			@client.send(line)
 
 			puts "  * [input] " + line
@@ -25,6 +30,11 @@ class DistssClient
 
 			msg = @client.recv
 			puts msg
+
+			# pingで接続確認が来た場合
+			if msg =~ /ping/
+#				@client.send("pong")
+			end
 		end
 	end
 end
