@@ -83,6 +83,16 @@ class DistssServer
 		puts "-----"
 	end
 
+	def DumpNode()
+		id = 0
+		puts "----- node -----"
+		@node_list.each do |node|
+			printf("id = %d, last_alive_time = %s\n", id, node.private.last_alive_time.to_s)
+			id += 1
+		end
+		puts "-----"
+	end
+
 	def onConnect(tinfo)
 		tinfo.private            = NodeInfo.new
 		tinfo.private.authed     = false
@@ -160,7 +170,6 @@ class DistssServer
 							next
 						end
 
-						p item
 						if item.processer != node
 							puts "[error] another node send finished."
 						else
@@ -173,7 +182,7 @@ class DistssServer
 							end
 						end
 
-						DumpItem()
+						# DumpItem()
 					end
 
 					# 動画のエラー
@@ -268,6 +277,7 @@ class DistssServer
 			if (Time.now - @last_dump_time) > 1
 				@last_dump_time = Time.now
 				DumpItem()
+				DumpNode()
 			end
 		end
 
