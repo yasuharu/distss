@@ -7,9 +7,10 @@ SERVER_PORT = 20001
 
 class NetworkTest < Test::Unit::TestCase
 	def setup
+		Thread.abort_on_exception = true
+
 		@server = NetworkServer.new(SERVER_PORT)
 		Thread.new { @server.run }
-
 	end
 
 	def connect

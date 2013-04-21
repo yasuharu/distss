@@ -4,12 +4,23 @@ require "network.rb"
 
 SERVER_PORT = 20000
 SERVER_HOST = "127.0.0.1"
-BUFFER_SIZE = 1024
+
+EXECUTER_ST_NONE = 1
+EXECUTER_ST_GET_WAIT = 2
+EXECUTER_ST_RUNNING = 3
 
 class ExecuterStatus
 	attr_accessor :status
 
+	attr_accessor :id
+
+	attr_accessor :command
+
+	attr_accessor :run_thread
+
 	def initialize()
+		@status = EXECUTER_ST_NONE
+		@id     = -1
 	end
 end
 
@@ -20,63 +31,79 @@ class DistssExecuter
 	def run()
 		puts " * connect server begin"
 
-		server_ip = IPSocket.getaddress(SERVER_HOST)
+		@client = NetworkClient.new(SERVER_HOST, SERVER_PORT)
 
-		puts " * connecting to " + SERVER_HOST + "(" + server_ip + ")"
-		@socket = TCPSocket.open(server_ip, SERVER_PORT)
-		@info   = NetworkThreadInfo.new(@socket)
+		@status        = ExecuterStatus.new
+		@status.status = EXECUTER_ST_NONE
 
-		puts " * connect success"
-
-		while line = STDIN.gets
-			# * getでジョブを取ってくる
-			#  * OKの場合：そのまま実行
-			#  * NGの場合：ジョブがたまるまで待つ
-			# * 定期的なpingに応答する
-			packet = Packet.new
-			packet.message = line
-
-			puts "  * [input] " + packet.message
+		if(!@client.connect)
+			return
 		end
 
 		while true
-			while Recv?
-				packet = RecvPacket()
-				msg    = Unpack(packet)
+			if @client.lost?
+				puts " * shutdown client"
+				break
+			end
 
-				# * メッセージの解析
-				if msg =~ /exec (.*)/
+			if @status.status == EXECUTER_ST_NONE
+				@client.send("get")
+				@status.status = EXECUTER_ST_GET_WAIT
+			end
+
+			if @client.recv?
+				msg = @client.recv
+				puts msg
+
+				# pingで接続確認が来た場合
+				if msg =~ /ping/
+					@client.send("pong")
+				end
+
+				if msg =~ /status (.*)/
+					# finのタイミングと入れちがうことがあるため，スレッドの状態をチェックする
+					# もし，終了している場合には無視しても問題ない
+					if @status.run_thread.alive?
+						@client.send("statusr " + @status.id.to_s + " 100")
+					end
+				end
+
+				# getの返事が返ってきた？
+				if msg =~ /^getr (-?\d*) (.*)$/
+					puts $1
+					id      = $1.to_i
+					command = $2
+
+					if @status.status != EXECUTER_ST_GET_WAIT
+						puts "[BUG] status is wrong."
+					end
+
+					# ジョブがあるか？
+					if id != -1
+						printf("[info] start %d job(command = %s).\n", id, command)
+						@status.status  = EXECUTER_ST_RUNNING
+						@status.id      = id
+						@status.command = command
+
+						# コマンドを実行する
+						@status.run_thread = Thread.new {
+							`#{command}`
+						}
+					else
+						puts "[info] no job."
+						@status.status = EXECUTER_ST_NONE
+					end
+				end
+			end
+
+			if EXECUTER_ST_RUNNING == @status.status
+				# 終了していれば，finを返す
+				if !@status.run_thread.alive?
+					@client.send("fin " + @status.id.to_s)
+					@status.status = EXECUTER_ST_NONE
 				end
 			end
 		end
-	end
-
-	def Recv?
-		return @info.recv_queue.empty?
-	end
-
-	def RecvPacket
-		@info.recv_queue_mutex.synchronize do
-			packet = @info.recv_queue.pop()
-		end
-
-		return packet
-	end
-
-	def SendPacket(packet)
-		@info.send_queue_mutex.synchronize do
-			@info.send_queue.push(packet)
-		end
-	end
-
-	def Pack(msg)
-		packet = Packet.new
-		packet.message = msg
-		return packet
-	end
-
-	def Unpack(packet)
-		return packet.message
 	end
 end
 

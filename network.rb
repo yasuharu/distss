@@ -3,6 +3,7 @@ require "socket"
 require "thread"
 
 BUFFER_SIZE = 1024
+DELIMITER   = "\n"
 
 # @brief 送受信単位のデータを格納する
 class Packet
@@ -212,6 +213,9 @@ class SendThread
 
 				puts "  * [send] " + packet.message
 
+				# デリミタを挿入
+				packet.message += DELIMITER
+
 				begin
 					@info.socket.write(packet.message)
 				rescue => e
@@ -238,6 +242,9 @@ class RecvThread
 
 	def run()
 		puts " * create RecvThread"
+
+		# 最後に受信してデリミタに達しなかった文字列
+		last_message = ""
 
 		while true
 			# サーバの終了チェック
@@ -274,13 +281,29 @@ class RecvThread
 				break
 			end
 
-			packet = Packet.new
-			packet.message = buf
+			# メッセージを分割する
+			message = last_message
 
-			puts "  * [recv] " + packet.message
+			for i in 0..buf.length-1 do
+				if buf[i].chr == DELIMITER
+					packet = Packet.new
+					packet.message = message
 
-			@info.recv_queue_mutex.synchronize do
-				@info.recv_queue.push(packet)
+					puts "  * [recv] " + packet.message
+
+					@info.recv_queue_mutex.synchronize do
+						@info.recv_queue.push(packet)
+					end
+
+					message = ""
+				else
+					message += buf[i].chr
+				end
+			end
+
+			# デリミタに達せずに残った文字列は一旦保存する
+			if message != ""
+				last_message = message
 			end
 		end
 
