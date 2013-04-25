@@ -18,6 +18,8 @@ class ExecuterStatus
 
 	attr_accessor :run_thread
 
+	attr_accessor :retmsg
+
 	def initialize()
 		@status = EXECUTER_ST_NONE
 		@id     = -1
@@ -56,16 +58,16 @@ class DistssExecuter
 				puts msg
 
 				# pingで接続確認が来た場合
-				if msg =~ /ping/
+				if msg =~ /^ping$/
 					@client.send("pong")
 				end
 
-				if msg =~ /status (.*)/
+				if msg =~ /^status (.*)/
 					# finのタイミングと入れちがうことがあるため，スレッドの状態をチェックする
 					# もし，終了している場合には無視しても問題ない
-					if @status.run_thread.alive?
+#					if @status.run_thread.alive?
 						@client.send("statusr " + @status.id.to_s + " 100")
-					end
+#					end
 				end
 
 				# getの返事が返ってきた？
@@ -87,11 +89,14 @@ class DistssExecuter
 
 						# コマンドを実行する
 						@status.run_thread = Thread.new {
-							`#{command}`
+							ret = `#{command}`
+							@status.retmsg = ret
 						}
 					else
 						puts "[info] no job."
 						@status.status = EXECUTER_ST_NONE
+
+						sleep 1
 					end
 				end
 			end
@@ -99,7 +104,13 @@ class DistssExecuter
 			if EXECUTER_ST_RUNNING == @status.status
 				# 終了していれば，finを返す
 				if !@status.run_thread.alive?
-					@client.send("fin " + @status.id.to_s)
+					# デリミタが\nなので実際の改行コードは\rにする
+					msg = @status.retmsg.gsub("\r\n", "")
+					msg = msg.gsub("\n", "")
+
+#					p msg
+
+					@client.send("fin " + @status.id.to_s + " " + msg)
 					@status.status = EXECUTER_ST_NONE
 				end
 			end

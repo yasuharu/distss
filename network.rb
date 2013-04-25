@@ -1,9 +1,14 @@
 
 require "socket"
 require "thread"
+require "resolv"
 
-BUFFER_SIZE = 1024
+BUFFER_SIZE = 10240
 DELIMITER   = "\n"
+
+NETWORK_ST_STOP    = 1
+NETWORK_ST_RUNNING = 2
+NETWORK_ST_CLOSED  = 3
 
 # @brief 送受信単位のデータを格納する
 class Packet
@@ -22,7 +27,7 @@ class NetworkClient
 	def connect
 		begin
 			puts " * connect server begin"
-			server_ip = IPSocket.getaddress(@host)
+			server_ip = Resolv.getaddress(@host)
 
 			puts " * connecting to " + @host + "(" + server_ip + ")"
 			@socket = TCPSocket.open(server_ip, @port)
@@ -84,9 +89,19 @@ class NetworkServer
 		@nlist     = Array.new
 		@port      = port
 		@onConnect = nil
+		@shutdown  = false
+		@status    = NETWORK_ST_STOP
 	end
 
 	def close
+		if @status != NETWORK_ST_RUNNING
+			puts " * already closed"
+			return
+		end
+
+		# @FIXME
+		@shutdown = true
+
 		# @brief スレッドを止める
 		@nlist.each do |info|
 			info.shutdown = true
@@ -95,6 +110,11 @@ class NetworkServer
 			info.send_thread.join
 			info.recv_thread.join
 		end
+
+		@accept_thread.join
+		@server.close
+
+		@status = NETWORK_ST_CLOSED
 	end
 
 	def disconnect(info)
@@ -130,14 +150,32 @@ class NetworkServer
 		return packet.message
 	end
 
-	def run()
+	def accept_thread
 		puts " * starting server"
 
 		@server = TCPServer.open(@port)
 
+		# クライアントの接続を待ち受け
+		puts " * waiting client"
+
 		while true
-			# クライアントの接続を待ち受け
-			puts " * waiting server"
+			# サーバの終了チェック
+			if @shutdown
+				break
+			end
+
+			connected = false
+#			puts " * connecting..."
+
+			ret = IO::select([@server], nil, nil, 1)
+			if(ret != nil && ret[0].length != 0)
+				connected = true
+			end
+
+			if !connected
+				next
+			end
+
 			socket = @server.accept
 
 			puts " * connecting client"
@@ -149,11 +187,14 @@ class NetworkServer
 			end
 
 			@nlist.push(tinfo)
-
-#			end
 		end
 
 		puts " * end server"
+	end
+
+	def run()
+		@accept_thread = Thread.new { accept_thread }
+		@status = NETWORK_ST_RUNNING
 	end
 end
 
@@ -211,13 +252,15 @@ class SendThread
 					packet = @info.send_queue.pop()
 				end
 
-				puts "  * [send] " + packet.message
+				puts "  * [send] " + packet.message.slice(0, 20)
+				puts "  * [send] size = " + packet.message.length.to_s
 
 				# デリミタを挿入
 				packet.message += DELIMITER
 
 				begin
-					@info.socket.write(packet.message)
+					ret = @info.socket.write(packet.message)
+					puts "  * [send] send size = " + ret.to_s
 				rescue => e
 					p e
 					break
@@ -255,8 +298,8 @@ class RecvThread
 			# メッセージの到着チェック
 			recved = false
 			begin
-				ret = IO::select([@info.socket])
-				if(ret[0].length != 0)
+				ret = IO::select([@info.socket], nil, nil, 1)
+				if(ret != nil && ret[0].length != 0)
 					recved = true
 				end
 			rescue => e
@@ -289,7 +332,8 @@ class RecvThread
 					packet = Packet.new
 					packet.message = message
 
-					puts "  * [recv] " + packet.message
+					puts "  * [recv] " + packet.message.slice(0, 20)
+					puts "  * [recv] size = " + packet.message.length.to_s
 
 					@info.recv_queue_mutex.synchronize do
 						@info.recv_queue.push(packet)

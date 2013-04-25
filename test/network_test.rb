@@ -31,13 +31,13 @@ class NetworkTest < Test::Unit::TestCase
 		assert_equal(ret, true)
 	end
 
-	# @brief localhsotで接続する
-	def test_connect_host()
-		client = NetworkClient.new("localhost", SERVER_PORT)
-		ret = client.connect
-
-		assert_equal(ret, true)
-	end
+#	# @brief localhsotで接続する
+#	def test_connect_host()
+#		client = NetworkClient.new("localhost", SERVER_PORT)
+#		ret = client.connect
+#
+#		assert_equal(ret, true)
+#	end
 
 	# @brief ダメなホスト名で接続する
 #	def test_wrong_server()
@@ -68,73 +68,94 @@ class NetworkTest < Test::Unit::TestCase
 		client.close
 	end
 
-	# @brief 複数のセッションを接続する
-	def test_alot_connect
-		clients = Array.new
-		num     = 10
+#	# @brief 複数のセッションを接続する
+#	def test_alot_connect
+#		clients = Array.new
+#		num     = 10
+#
+#		for i in 0..num do
+#			ret = connect
+#			assert_not_equal(ret, nil)
+#
+#			clients.push(ret)
+#		end
+#
+#		for i in 0..num do
+#			client = clients[i]
+#			if client != nil
+#				client.close
+#			end
+#		end
+#	end
+#
+#	# @brief 複数のセッションを接続して，サーバ側を落とす
+#	def test_alot_server_disconnect
+#		clients = Array.new
+#		num     = 10
+#
+#		for i in 0..num do
+#			ret = connect
+#			assert_not_equal(ret, nil)
+#
+#			clients.push(ret)
+#		end
+#
+#		@server.close
+#
+#		for i in 0..num do
+#			client = clients[i]
+#			if client != nil
+#				client.close
+#			end
+#		end
+#	end
+#
+#	# @brief 連続でメッセージを送ってみる
+#	def test_send_message
+#		clients = Array.new
+#		num     = 3
+#
+#		for i in 0..num do
+#			ret = connect
+#			assert_not_equal(ret, nil)
+#
+#			clients.push(ret)
+#		end
+#
+#		for j in 0..200 do
+#			for i in 0..num do
+#				client = clients[i]
+#				if client != nil
+#					client.send("hogehoge")
+#				end
+#			end
+#		end
+#
+#		sleep 3
+#	end
 
-		for i in 0..num do
-			ret = connect
-			assert_not_equal(ret, nil)
+	def protocol_test
+		client = connect()
 
-			clients.push(ret)
-		end
-
-		for i in 0..num do
-			client = clients[i]
-			if client != nil
-				client.close
-			end
-		end
+		# add
+		send("add hoge")
+		ret = recv()
+		assert_equal("1", ret)
 	end
 
-	# @brief 複数のセッションを接続して，サーバ側を落とす
-	def test_alot_server_disconnect
-		clients = Array.new
-		num     = 10
-
-		for i in 0..num do
-			ret = connect
-			assert_not_equal(ret, nil)
-
-			clients.push(ret)
-		end
-
-		@server.close
-
-		for i in 0..num do
-			client = clients[i]
-			if client != nil
-				client.close
-			end
-		end
+	def send(client, msg)
+		client.send(msg)
 	end
 
-	# @brief 連続でメッセージを送ってみる
-	def test_send_message
-		clients = Array.new
-		num     = 3
-
-		for i in 0..num do
-			ret = connect
-			assert_not_equal(ret, nil)
-
-			clients.push(ret)
+	def recv(client)
+		while(!client.recv?)
 		end
-
-		for j in 0..200 do
-			for i in 0..num do
-				client = clients[i]
-				if client != nil
-					client.send("hogehoge")
-				end
-			end
-		end
-
-		sleep 3
+		return client.recv()
 	end
 
 	def teardown
+		puts " * server close"
+		@server.close
 	end
 end
 

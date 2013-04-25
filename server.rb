@@ -3,13 +3,14 @@ require "thread"
 require "network"
 
 SERVER_PORT = 20000
-CLIENT_CHECK_TIME = 30
-CLIENT_CHECK_RETRY_TIME = 25
-CLIENT_TIMEOUT    = 30
 
-ITEM_CHECK_TIME = 1
+CLIENT_CHECK_TIME       = 5
+CLIENT_CHECK_RETRY_TIME = 1
+CLIENT_TIMEOUT          = 30
+
+ITEM_CHECK_TIME       = 1
 ITEM_CHECK_RETRY_TIME = 1
-ITEM_TIMEOUT    = 5
+ITEM_TIMEOUT          = 30
 
 class NodeInfo
 	attr_accessor :tinfo
@@ -94,6 +95,7 @@ class DistssServer
 	end
 
 	def onConnect(tinfo)
+		# @FIXME ノード情報をprivateにしないといけないのはどうにかしたい
 		tinfo.private            = NodeInfo.new
 		tinfo.private.authed     = false
 		tinfo.private.last_alive_time = Time.now
@@ -105,7 +107,9 @@ class DistssServer
 
 		# サーバのスレッドを開始する
 		@server.onConnect = self.method(:onConnect)
-		@server_thread = Thread.new { @server.run }
+		@server.run
+
+		# @FIXME nlistをロックせずに読み書きしており，確率がかなり低いものの厄介な不具合を起こす可能性が高い
 		@node_list     = @server.nlist
 
 		@item_list  = Array.new
@@ -122,10 +126,12 @@ class DistssServer
 					request = @server.recv(node)
 					reply   = nil
 
+					puts " * [request] " + request.slice(0, 20)
+
 					# 動画の追加
 					# request : add <コマンド文字列>
 					# reply   : addr <id>
-					if request =~ /add (.*)/
+					if request =~ /^add (.*)$/
 						i = ItemInfo.new($1, @id_count)
 						@id_count += 1
 
@@ -139,7 +145,7 @@ class DistssServer
 					# request : get
 					# reply(コマンドがある場合) : getr <id> <コマンド文字列>
 					# reply(コマンドがない場合) : getr -1 none
-					if request =~ /get/
+					if request =~ /^get/
 						reply = "getr "
 						if !@wait_queue.empty?
 							# waitキューから要素を取得
@@ -158,9 +164,9 @@ class DistssServer
 					end
 
 					# 動画の完了
-					# request : fin <id>
+					# request : fin <id> <出力メッセージ>
 					# reply   : finr
-					if request =~ /fin (.*)/
+					if request =~ /^fin (\d*) (.*)$/m
 						id    = $1.to_i
 						item  = FindItemById(id)
 						reply = "finr"
@@ -173,7 +179,8 @@ class DistssServer
 						if item.processer != node
 							puts "[error] another node send finished."
 						else
-							# item.processer == node でかつ，item.proceed == false の場合は，タイムアウトしてしまったけど，処理結果を返してきている
+							# item.processer == node でかつ，item.proceed == false の場合は，
+							# タイムアウトしてしまったけど，処理結果を返してきている
 							if item.proceed == false
 								puts "[error] already timeout"
 							else
@@ -188,7 +195,7 @@ class DistssServer
 					# 動画のエラー
 					# request : err <id>
 					# reply   : errr
-					if request =~ /err (.*)/
+					if request =~ /^err (.*)/
 						# エラーの場合は状態を差し戻し
 						id    = $1.to_i
 						item  = FindItemById(id)
@@ -214,7 +221,7 @@ class DistssServer
 					# ステータス確認
 					# request : status <id>
 					# reply   : statusr <id> <percentage>
-					if request =~ /statusr (.*) (.*)/
+					if request =~ /^statusr (.*) (.*)/
 						id         = $1.to_i
 						percentage = $2.to_i
 						item       = FindItemById(id)
@@ -243,6 +250,7 @@ class DistssServer
 
 				# クライアントの接続がタイムアウトした場合
 				if (Time.now - node.private.last_alive_time) > CLIENT_TIMEOUT
+					puts " ****** connection timeout *****"
 					@server.disconnect(node)
 				end
 			end
