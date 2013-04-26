@@ -1,13 +1,14 @@
 
 require "socket"
-require "network.rb"
+require "network"
+require "flogger"
 
 SERVER_PORT = 20000
 SERVER_HOST = "127.0.0.1"
 
-EXECUTER_ST_NONE = 1
+EXECUTER_ST_NONE     = 1
 EXECUTER_ST_GET_WAIT = 2
-EXECUTER_ST_RUNNING = 3
+EXECUTER_ST_RUNNING  = 3
 
 class ExecuterStatus
 	attr_accessor :status
@@ -31,7 +32,7 @@ class DistssExecuter
 	end
 
 	def run()
-		puts " * connect server begin"
+		$logger.INFO("connect server begin")
 
 		@client = NetworkClient.new(SERVER_HOST, SERVER_PORT)
 
@@ -44,7 +45,7 @@ class DistssExecuter
 
 		while true
 			if @client.lost?
-				puts " * shutdown client"
+				$logger.INFO("shutdown client")
 				break
 			end
 
@@ -55,7 +56,7 @@ class DistssExecuter
 
 			if @client.recv?
 				msg = @client.recv
-				puts msg
+				$logger.DEBUG(msg)
 
 				# pingで接続確認が来た場合
 				if msg =~ /^ping$/
@@ -72,17 +73,17 @@ class DistssExecuter
 
 				# getの返事が返ってきた？
 				if msg =~ /^getr (-?\d*) (.*)$/
-					puts $1
+					$logger.DEBUG($1)
 					id      = $1.to_i
 					command = $2
 
 					if @status.status != EXECUTER_ST_GET_WAIT
-						puts "[BUG] status is wrong."
+						$logger.ERROR(" [BUG] status is wrong")
 					end
 
 					# ジョブがあるか？
 					if id != -1
-						printf("[info] start %d job(command = %s).\n", id, command)
+						$logger.INFO("start %d job(command = %s)" % [id, command])
 						@status.status  = EXECUTER_ST_RUNNING
 						@status.id      = id
 						@status.command = command
@@ -93,7 +94,7 @@ class DistssExecuter
 							@status.retmsg = ret
 						}
 					else
-						puts "[info] no job."
+						$logger.WARN("no job")
 						@status.status = EXECUTER_ST_NONE
 
 						sleep 1
@@ -105,8 +106,7 @@ class DistssExecuter
 				# 終了していれば，finを返す
 				if !@status.run_thread.alive?
 					# デリミタが\nなので実際の改行コードは\rにする
-					msg = @status.retmsg.gsub("\r\n", "")
-					msg = msg.gsub("\n", "")
+					msg = @status.retmsg.gsub(/(\r\n|\r|\n)/, '<br>')
 
 #					p msg
 
@@ -118,7 +118,9 @@ class DistssExecuter
 	end
 end
 
+$logger.level = FLogger::LEVEL_DEBUG
 Thread.abort_on_exception = true
+
 executer = DistssExecuter.new
 executer.run()
 

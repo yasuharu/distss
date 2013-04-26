@@ -48,6 +48,9 @@ class ItemInfo
 	# 現在の状況(0 - 100のパーセント値)
 	attr_accessor :percentage
 
+	# @brief 実行要求を出したノード
+	attr_accessor :requester
+
 	def initialize(command, id)
 		@command = command
 		@proceed = false
@@ -76,41 +79,41 @@ class DistssServer
 	end
 
 	def DumpItem()
-		puts "----- dump -----"
+		$logger.DEBUG("----- dump -----")
 		@item_list.each do |item|
-			printf("id = %d, command = %s, st = %s, percentage = %d\n",
-				item.id.to_s, item.command, item.proceed.to_s, item.percentage)
+			$logger.DEBUG("id = %d, command = %s, st = %s, percentage = %d" %
+				[item.id.to_s, item.command, item.proceed.to_s, item.percentage])
 		end
-		puts "-----"
+		$logger.DEBUG("-----")
 	end
 
 	def DumpNode()
 		id = 0
-		puts "----- node -----"
+		$logger.DEBUG("----- node -----")
 		@node_list.each do |node|
-			printf("id = %d, last_alive_time = %s\n", id, node.private.last_alive_time.to_s)
+			$logger.DEBUG("id = %d, last_alive_time = %s" % [id, node.private.last_alive_time.to_s])
 			id += 1
 		end
-		puts "-----"
+		$logger.DEBUG("-----")
 	end
 
 	def onConnect(tinfo)
 		# @FIXME ノード情報をprivateにしないといけないのはどうにかしたい
-		tinfo.private            = NodeInfo.new
-		tinfo.private.authed     = false
-		tinfo.private.last_alive_time = Time.now
+		tinfo.private                  = NodeInfo.new
+		tinfo.private.authed           = false
+		tinfo.private.last_alive_time  = Time.now
 		tinfo.private.alive_check_time = Time.now
 	end
 
 	def run()
-		puts " * create ServerControllerThread"
+		$logger.INFO("create ServerControllerThread")
 
 		# サーバのスレッドを開始する
 		@server.onConnect = self.method(:onConnect)
 		@server.run
 
 		# @FIXME nlistをロックせずに読み書きしており，確率がかなり低いものの厄介な不具合を起こす可能性が高い
-		@node_list     = @server.nlist
+		@node_list  = @server.nlist
 
 		@item_list  = Array.new
 		@wait_queue = Queue.new
@@ -126,13 +129,15 @@ class DistssServer
 					request = @server.recv(node)
 					reply   = nil
 
-					puts " * [request] " + request.slice(0, 20)
+					$logger.DEBUG(" [request] " + request.slice(0, 20))
 
 					# 動画の追加
 					# request : add <コマンド文字列>
 					# reply   : addr <id>
 					if request =~ /^add (.*)$/
-						i = ItemInfo.new($1, @id_count)
+						i           = ItemInfo.new($1, @id_count)
+						i.requester = node
+
 						@id_count += 1
 
 						@item_list.push(i)
@@ -167,25 +172,34 @@ class DistssServer
 					# request : fin <id> <出力メッセージ>
 					# reply   : finr
 					if request =~ /^fin (\d*) (.*)$/m
-						id    = $1.to_i
-						item  = FindItemById(id)
-						reply = "finr"
+						id     = $1.to_i
+						item   = FindItemById(id)
+						result = $2
+
+						reply = ""
 
 						if nil == item
-							puts "[error] wrong job id"
+							$logger.ERROR("wrong job id")
 							next
 						end
 
 						if item.processer != node
-							puts "[error] another node send finished."
+							$logger.ERROR("another node send finished")
+							reply = "finr -1"
 						else
 							# item.processer == node でかつ，item.proceed == false の場合は，
 							# タイムアウトしてしまったけど，処理結果を返してきている
 							if item.proceed == false
-								puts "[error] already timeout"
+								$logger.ERROR("already timeout")
+								reply = "finr -1"
 							else
 								# 終了したので削除
 								@item_list.delete(item)
+								$logger.INFO("%d job is finished" % id)
+								reply = "finr " + id.to_s
+
+								# 要求を出したノードに返事を返す
+								@server.send(item.requester, "finr " + result)
 							end
 						end
 
@@ -204,7 +218,7 @@ class DistssServer
 						# @FIXME これ忘れていたらアウト？
 						#        ケアレスミスを減らすためのロジックを考える
 						if nil == item
-							puts "[error] wrong job id"
+							$logger.ERROR("wrong job id")
 							next
 						end
 
@@ -227,7 +241,7 @@ class DistssServer
 						item       = FindItemById(id)
 
 						if item == nil
-							puts "[info] invalid statusr"
+							$logger.WARN("invalid statusr")
 						else
 							item.last_status_time = Time.now
 							item.percentage       = percentage
@@ -250,7 +264,7 @@ class DistssServer
 
 				# クライアントの接続がタイムアウトした場合
 				if (Time.now - node.private.last_alive_time) > CLIENT_TIMEOUT
-					puts " ****** connection timeout *****"
+					$logger.WARN(" ****** connection timeout *****")
 					@server.disconnect(node)
 				end
 			end
@@ -278,7 +292,7 @@ class DistssServer
 					item.proceed = false
 					@wait_queue.push(item)
 
-					printf "[warn] item timeout %d\n", item.id
+					$logger.WARN("item timeout " + item.id)
 				end
 			end
 
@@ -289,10 +303,11 @@ class DistssServer
 			end
 		end
 
-		puts " * end ServerControllerThread"
+		$logger.INFO("end ServerControllerThread")
 	end
 end
 
+$logger.level = FLogger::LEVEL_DEBUG
 Thread.abort_on_exception = true
 
 server = DistssServer.new()

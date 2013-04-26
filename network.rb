@@ -2,6 +2,7 @@
 require "socket"
 require "thread"
 require "resolv"
+require "flogger"
 
 BUFFER_SIZE = 10240
 DELIMITER   = "\n"
@@ -26,19 +27,19 @@ class NetworkClient
 	# @ret false 失敗
 	def connect
 		begin
-			puts " * connect server begin"
+			$logger.INFO("connect to server begin")
 			server_ip = Resolv.getaddress(@host)
 
-			puts " * connecting to " + @host + "(" + server_ip + ")"
+			$logger.DEBUG("connecting to " + @host + "(" + server_ip + ")")
 			@socket = TCPSocket.open(server_ip, @port)
 		rescue => e
-			p e
+			$logger.ERROR(e)
 			return false
 		end
 
 		@info = NetworkThreadInfo.new(@socket)
 
-		puts " * connect success"
+		$logger.INFO("connect success")
 
 		return true
 	end
@@ -54,7 +55,11 @@ class NetworkClient
 
 	# @ret true 受信可能
 	def recv?
-		return !@info.recv_queue.empty?
+		ret = true
+		@info.recv_queue_mutex.synchronize do
+			ret = !@info.recv_queue.empty?
+		end
+		return ret
 	end
 
 	def recv
@@ -95,7 +100,7 @@ class NetworkServer
 
 	def close
 		if @status != NETWORK_ST_RUNNING
-			puts " * already closed"
+			$logger.ERROR("server already closed")
 			return
 		end
 
@@ -151,12 +156,12 @@ class NetworkServer
 	end
 
 	def accept_thread
-		puts " * starting server"
+		$logger.INFO("starting server")
 
 		@server = TCPServer.open(@port)
 
 		# クライアントの接続を待ち受け
-		puts " * waiting client"
+		$logger.INFO("waiting client")
 
 		while true
 			# サーバの終了チェック
@@ -165,7 +170,6 @@ class NetworkServer
 			end
 
 			connected = false
-#			puts " * connecting..."
 
 			ret = IO::select([@server], nil, nil, 1)
 			if(ret != nil && ret[0].length != 0)
@@ -178,7 +182,7 @@ class NetworkServer
 
 			socket = @server.accept
 
-			puts " * connecting client"
+			$logger.INFO("connecting client")
 
 			# 接続したクライアントのスレッドを生成
 			tinfo = NetworkThreadInfo.new(socket)
@@ -189,12 +193,12 @@ class NetworkServer
 			@nlist.push(tinfo)
 		end
 
-		puts " * end server"
+		$logger.INFO("end server")
 	end
 
 	def run()
 		@accept_thread = Thread.new { accept_thread }
-		@status = NETWORK_ST_RUNNING
+		@status        = NETWORK_ST_RUNNING
 	end
 end
 
@@ -242,7 +246,7 @@ class SendThread
 	end
 
 	def run()
-		puts " * create SendThread"
+		$logger.INFO("create SendThread")
 
 		while true
 			# メッセージの送信チェック
@@ -252,15 +256,15 @@ class SendThread
 					packet = @info.send_queue.pop()
 				end
 
-				puts "  * [send] " + packet.message.slice(0, 20)
-				puts "  * [send] size = " + packet.message.length.to_s
+				$logger.DEBUG(" [send] " + packet.message.slice(0, 20))
+				$logger.DEBUG(" [send] size = " + packet.message.length.to_s)
 
 				# デリミタを挿入
 				packet.message += DELIMITER
 
 				begin
 					ret = @info.socket.write(packet.message)
-					puts "  * [send] send size = " + ret.to_s
+					$logger.DEBUG(" [send] send size = " + ret.to_s)
 				rescue => e
 					p e
 					break
@@ -274,7 +278,7 @@ class SendThread
 
 		@info.shutdown = true
 
-		puts " * destroy SendThread"
+		$logger.INFO("destroy SendThread")
 	end
 end
 
@@ -284,7 +288,7 @@ class RecvThread
 	end
 
 	def run()
-		puts " * create RecvThread"
+		$logger.INFO("create RecvThread")
 
 		# 最後に受信してデリミタに達しなかった文字列
 		last_message = ""
@@ -303,7 +307,7 @@ class RecvThread
 					recved = true
 				end
 			rescue => e
-				p e
+				$logger.ERROR(e)
 				break
 			end
 
@@ -315,7 +319,7 @@ class RecvThread
 			begin
 				buf = @info.socket.recv(BUFFER_SIZE)
 			rescue => e
-				p e
+				$logger.ERROR(e)
 				break
 			end
 
@@ -332,8 +336,8 @@ class RecvThread
 					packet = Packet.new
 					packet.message = message
 
-					puts "  * [recv] " + packet.message.slice(0, 20)
-					puts "  * [recv] size = " + packet.message.length.to_s
+					$logger.DEBUG(" [recv] " + packet.message.slice(0, 20))
+					$logger.DEBUG(" [recv] size = " + packet.message.length.to_s)
 
 					@info.recv_queue_mutex.synchronize do
 						@info.recv_queue.push(packet)
@@ -346,13 +350,11 @@ class RecvThread
 			end
 
 			# デリミタに達せずに残った文字列は一旦保存する
-			if message != ""
-				last_message = message
-			end
+			last_message = message
 		end
 
 		@info.shutdown = true
 
-		puts " * destroy RecvThread"
+		$logger.INFO("destroy RecvThread")
 	end
 end
