@@ -81,6 +81,7 @@ class DistssClient
 end
 
 $logger.level = FLogger::LEVEL_ERROR
+$logger.tag   = "client"
 Thread.abort_on_exception = true
 
 client = DistssClient.new

@@ -4,6 +4,7 @@ class FLogger
 	def initialize()
 		@file  = STDOUT
 		@level = LEVEL_INFO
+		@tag   = nil
 	end
 
 	COLOR_DEFAULT = "\033[39m"
@@ -19,6 +20,7 @@ class FLogger
 	LEVEL_ERROR = 4
 
 	attr_accessor :level
+	attr_accessor :tag
 
 	def SetOutput(file)
 		@file = open(file, "a")
@@ -73,8 +75,12 @@ class FLogger
 		end
 	end
 
-	def output(msg, tag)
-		@file.write("[%s] %s\n" % [tag, msg])
+	def output(msg, level)
+		if @tag
+			@file.write("[%s] [%s] %s\n" % [level, @tag, msg])
+		else
+			@file.write("[%s] %s\n" % [level, msg])
+		end
 	end
 end
 

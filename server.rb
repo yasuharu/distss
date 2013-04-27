@@ -62,7 +62,15 @@ end
 
 class DistssServer
 	def initialize()
-		@server = NetworkServer.new(SERVER_PORT)
+		@server   = NetworkServer.new(SERVER_PORT)
+		@shutdown = false
+	end
+
+	# @brief サーバーを修了する
+	# @note  デバッグ用の機能なので，通常は使用しない
+	#        別スレッドでrunを実行して，closeすることを想定している
+	def close
+		@shutdown = true
 	end
 
 	# @brief IDからitemのインスタンスを探す
@@ -97,6 +105,7 @@ class DistssServer
 		$logger.DEBUG("-----")
 	end
 
+
 	def onConnect(tinfo)
 		# @FIXME ノード情報をprivateにしないといけないのはどうにかしたい
 		tinfo.private                  = NodeInfo.new
@@ -121,6 +130,10 @@ class DistssServer
 
 		@last_dump_time = Time.now
 		while true
+			if @shutdown
+				break
+			end
+
 			@node_list.each do |node|
 				while @server.recv?(node)
 					# 最終応答時間を修正
@@ -130,6 +143,11 @@ class DistssServer
 					reply   = nil
 
 					$logger.DEBUG(" [request] " + request.slice(0, 20))
+
+					# メッセージエコー
+					if request =~ /^echo (.*)$/
+						reply = $1
+					end
 
 					# 動画の追加
 					# request : add <コマンド文字列>
@@ -206,7 +224,7 @@ class DistssServer
 						# DumpItem()
 					end
 
-					# 動画のエラー
+					# コマンドのエラー
 					# request : err <id>
 					# reply   : errr
 					if request =~ /^err (.*)/
@@ -248,9 +266,11 @@ class DistssServer
 						end
 					end
 
-					if reply != nil
-						@server.send(node, reply)
+					if reply == nil
+						reply = "none"
 					end
+					@server.send(node, reply)
+
 				end
 
 				# クライアントが一定時間通信のない場合 ping を送信
@@ -292,7 +312,7 @@ class DistssServer
 					item.proceed = false
 					@wait_queue.push(item)
 
-					$logger.WARN("item timeout " + item.id)
+					$logger.WARN("item timeout " + item.id.to_s)
 				end
 			end
 
@@ -303,13 +323,20 @@ class DistssServer
 			end
 		end
 
+		@server.close
+
 		$logger.INFO("end ServerControllerThread")
 	end
 end
 
 $logger.level = FLogger::LEVEL_DEBUG
+$logger.tag   = "server"
 Thread.abort_on_exception = true
 
-server = DistssServer.new()
-server.run()
+if __FILE__ == $PROGRAM_NAME
+	puts " ***** INIT ****"
+	server = DistssServer.new()
+	server.run()
+end
+
 
