@@ -11,6 +11,10 @@ CLIENT_CHECK_TIME       = 1
 CLIENT_CHECK_RETRY_TIME = 1
 CLIENT_TIMEOUT          = 2
 
+ITEM_CHECK_TIME       = 1
+ITEM_CHECK_RETRY_TIME = 1
+ITEM_TIMEOUT          = 2
+
 class NetworkTest < Test::Unit::TestCase
 	def setup
 		Thread.abort_on_exception = true
@@ -20,6 +24,10 @@ class NetworkTest < Test::Unit::TestCase
 
 		$logger.level = FLogger::LEVEL_DEBUG
 
+		# 意図的にconnectしておいて，サーバ側には複数のノードがあるように振る舞う
+		connect()
+		connect()
+		connect()
 	end
 
 	# 補助用の関数
@@ -145,12 +153,101 @@ class NetworkTest < Test::Unit::TestCase
 
 	def test_protocol_status
 		client = connect()
+
+		client.send("add hoge")
+		assert_equal("1", recv(client))
+
+		client.send("get")
+		assert_equal("getr 1 hoge", recv(client))
+
+		total = 0
+
+		while total < ITEM_TIMEOUT + 1
+			sleep ITEM_CHECK_TIME
+			total += ITEM_CHECK_TIME
+
+			# クライアントの接続自体が切れないように注意
+			client.send("pong")
+			client.send("statusr 1 10")
+		end
+
+		while client.recv?
+			client.recv()
+		end
+
+		# タイムアウトしてなkれば，idが-1のものが帰ってくる
+		client.send("get")
+
+		# メッセージが来るまで待つ
+		count = 0
+		while "getr -1 none" != recv(client)
+			sleep 1
+			count += 1
+
+			if count > 10
+				flunk("timeout")
+			end
+		end
 	end
 
 	def test_item_timeout
+		client = connect()
+
+		client.send("add hoge")
+		assert_equal("1", recv(client))
+
+		client.send("get")
+		assert_equal("getr 1 hoge", recv(client))
+
+		total = 0
+
+		while total < ITEM_TIMEOUT + 1
+			sleep ITEM_CHECK_TIME
+			total += ITEM_CHECK_TIME
+
+			# クライアントの接続自体が切れないように注意
+			client.send("pong")
+			recv(client)
+		end
+
+		while client.recv?
+			client.recv()
+		end
+
+		# タイムアウトするとgetしたときに以前のコマンドが送られてくる
+		client.send("get")
+
+		# メッセージが来るまで待つ
+		count = 0
+		while "getr 1 hoge" != recv(client)
+			sleep 1
+			count += 1
+
+			if count > 10
+				flunk("timeout")
+			end
+		end
 	end
 
 	def test_client_timeout
+		client = connect()
+
+		total = 0
+
+		client.send("pong")
+		assert_equal("none", recv(client))
+
+		while total < CLIENT_TIMEOUT + 1
+			sleep CLIENT_CHECK_TIME
+			total += CLIENT_CHECK_TIME
+
+			if client.recv?
+				assert_equal("ping", recv(client))
+			end
+		end
+
+		# タイムアウトするとpingが送られなくなる
+		assert_equal(false, client.recv?)
 	end
 
 	def teardown
