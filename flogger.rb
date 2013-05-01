@@ -68,6 +68,18 @@ class FLogger
 		console_output COLOR_DEFAULT
 	end
 
+	def PASS()
+		if LEVEL_DEBUG < @level
+			return
+		end
+
+		console_output TEXT_BOLD
+		console_output COLOR_GREEN
+		msg = caller.join(", ")
+		output(msg, "PASS")
+		console_output COLOR_DEFAULT
+	end
+
 	# @brief STDOUT, STDERR‚ªo—Íæ‚Ìê‡‚Ì‚Ý•\Ž¦‚ð‚·‚é
 	def console_output(msg)
 		if STDOUT == @file || STDERR == @file
