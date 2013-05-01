@@ -90,7 +90,14 @@ class DistssExecuter
 
 						# コマンドを実行する
 						@status.run_thread = Thread.new {
-							ret = `#{command}`
+							ret = ""
+
+							begin
+								ret = `#{command}`
+							rescue => e
+								ret = e
+							end
+
 							@status.retmsg = ret
 						}
 					else
