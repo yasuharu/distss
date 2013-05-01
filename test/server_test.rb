@@ -111,6 +111,8 @@ class NetworkTest < Test::Unit::TestCase
 		assert_equal("1", recv(client))
 
 		client.send("get")
+
+		# @FIXME 受信タイミングによって結果がおかしくなる
 		assert_equal("getr 1 hoge", recv(client))
 
 		client.send("fin 1 fuga")

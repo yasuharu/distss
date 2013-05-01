@@ -12,6 +12,9 @@ class DistssClient
 		@command_file = nil
 	end
 
+	# @brief コマンドファイルを指定．nilだった場合は，標準入力を使用する
+	attr_accessor :command_file
+
 	def run()
 		# バッチモードの判定
 		@batch_mode = false
@@ -31,35 +34,35 @@ class DistssClient
 			$logger.ERROR("failed to connect server")
 			return
 		end
+		$logger.PASS
 
-		@thread       = Thread.new{ recv_thread() }
-		@recved_mutex = Mutex.new
-		@result_queue = Queue.new
+		# プロトコルを解析するレイヤーを初期化
+		@player = DistssProtocolLayer.new(@client)
+		@player.run()
 
 		# 送信した回数と受信する回数は一致することが保証される
-		# ただし，pingとかは除く
 		@send_count = 0
 
-		while (line = @file.gets)
+		$logger.PASS
+		while(line = @file.gets)
 			if @client.lost?
 				$logger.INFO("shutdown client")
 				break
 			end
 
+		$logger.PASS
 			@client.send(line)
 			@send_count += 1
 
+		$logger.PASS
 			# バッチモードじゃない場合は，処理待ちをする
 			if !@batch_mode
 				while 1
 					finished = false
-					@recved_mutex.synchronize do
-						if !@result_queue.empty?
-							result = @result_queue.pop()
-							r = result.gsub("<br>", "\n")
-							print r
-							finished = true
-						end
+					if (result = @player.get()) != nil
+						r = result.gsub("<br>", "\n")
+						print r
+						finished = true
 					end
 
 					if finished
@@ -76,13 +79,10 @@ class DistssClient
 		if @batch_mode
 			while @send_count > @recved_count
 				while 1
-					@recved_mutex.synchronize do
-						if !@result_queue.empty?
-							result = @result_queue.pop()
-							r = result.gsub("<br>", "\n")
-							print r
-							@recved_count += 1
-						end
+					if (result = @player.get()) != nil
+						r = result.gsub("<br>", "\n")
+						print r
+						@recved_count += 1
 					end
 
 					sleep 0.01
@@ -90,36 +90,56 @@ class DistssClient
 			end
 		end
 	end
+end
 
-	attr_accessor :recved_mutex
+class DistssProtocolLayer
+	def initialize(client)
+		@client       = client
+		@recved_mutex = Mutex.new
+		@result_queue = Queue.new
+	end
 
-	# @brief コマンドファイルを指定．nilだった場合は，標準入力を使用する
-	attr_accessor :command_file
+	def run()
+		@thread = Thread.new { run_thread }
+	end
 
-	def recv_thread()
+	# @brief 受信した内容を取得する
+	# @ret nil 受信バッファが空の場合
+	def get()
+		ret = nil
+		@recved_mutex.synchronize do
+			if !@result_queue.empty?
+				ret = @result_queue.pop()
+			end
+		end
+		return ret
+	end
+
+	def run_thread()
 		while true
 			if @client.lost?
 				break
 			end
 
-			while(!@client.recv?)
-			end
+			if @client.recv?
+				msg = @client.recv
+				$logger.INFO(msg)
 
-			msg = @client.recv
-			$logger.INFO(msg)
+				# pingで接続確認が来た場合
+				if msg =~ /^ping$/
+					@client.send("pong")
+				end
 
-			# pingで接続確認が来た場合
-			if msg =~ /^ping$/
-				@client.send("pong")
-			end
-
-			# コマンドの結果を見る
-			if msg =~ /^finr (.*)$/
-				# メインのスレッドに結果を渡す
-				@recved_mutex.synchronize do
-					@result_queue.push($1)
+				# コマンドの結果を見る
+				if msg =~ /^finr (.*)$/
+					# メインのスレッドに結果を渡す
+					@recved_mutex.synchronize do
+						@result_queue.push($1)
+					end
 				end
 			end
+
+			sleep 0.01
 		end
 	end
 end
