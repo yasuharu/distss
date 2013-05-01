@@ -8,9 +8,10 @@ CLIENT_CHECK_TIME       = 5
 CLIENT_CHECK_RETRY_TIME = 1
 CLIENT_TIMEOUT          = 30
 
-ITEM_CHECK_TIME       = 1
-ITEM_CHECK_RETRY_TIME = 1
-ITEM_TIMEOUT          = 30
+ITEM_CHECK_TIME  = 1
+ITEM_CHECK_RETRY = 10
+
+DEBUG_DUMP_TIME = 1
 
 class NodeInfo
 	attr_accessor :tinfo
@@ -39,11 +40,8 @@ class ItemInfo
 	# 実行中のコマンドを判断するためのID
 	attr_accessor :id
 
-	# 最後にステータスをチェックした時間
-	attr_accessor :last_status_time
-
 	# 最後にステータスチェックのリクエストを送った時間
-	attr_accessor :status_check_time
+	attr_accessor :status_check_timeout
 
 	# 現在の状況(0 - 100のパーセント値)
 	attr_accessor :percentage
@@ -55,8 +53,36 @@ class ItemInfo
 		@command = command
 		@proceed = false
 		@id      = id
-		@last_status_time = Time.now
-		@status_check_time = Time.now
+		@status_check_timeout = TimeoutHelper.new(ITEM_CHECK_TIME, ITEM_CHECK_RETRY)
+	end
+end
+
+# @brief タイムアウトを管理するクラス
+class TimeoutHelper
+	def initialize(timeout, retrymax = 0)
+		@timeout  = timeout
+		@retrymax = retrymax
+		@lasttime = Time.now
+		@retry_count = 0
+	end
+
+	def update
+		@lasttime    = Time.now
+		@retry_count = 0
+	end
+
+	def retry
+		@lasttime     = Time.now
+		@retry_count += 1
+	end
+
+	def expired?
+		return (Time.now - @lasttime) > @timeout
+	end
+
+	# @brief リトライカウントを振り切った場合
+	def cant_help?
+		return (@retry_count >= @retrymax)
 	end
 end
 
@@ -128,7 +154,7 @@ class DistssServer
 		@wait_queue = Queue.new
 		@id_count   = 1
 
-		@last_dump_time = Time.now
+		@dump_timeout = TimeoutHelper.new(DEBUG_DUMP_TIME)
 		while true
 			if @shutdown
 				break
@@ -180,7 +206,7 @@ class DistssServer
 							# 必要な情報をセット
 							item.proceed          = true
 							item.processer        = node
-							item.last_status_time = Time.now
+							item.status_check_timeout.update
 						else
 							reply += "-1 none"
 						end
@@ -261,8 +287,8 @@ class DistssServer
 						if item == nil
 							$logger.WARN("invalid statusr")
 						else
-							item.last_status_time = Time.now
-							item.percentage       = percentage
+							item.status_check_timeout.update
+							item.percentage = percentage
 						end
 					end
 
@@ -297,27 +323,24 @@ class DistssServer
 				end
 
 				# 実行中の場合は一定期間ごとにステータスを求める
-				if (Time.now - item.last_status_time) > ITEM_CHECK_TIME
-					if (Time.now - item.status_check_time) > ITEM_CHECK_RETRY_TIME
-						msg = "status " + item.id.to_s
-						item.status_check_time = Time.now
+				if item.status_check_timeout.expired?
+					# 一定時間以上返事を返していない場合，アプリケーションが落ちたと判断する
+					# （ただし，ノード自体が落ちたとは判断をしない．ノードはpingの時間から判定をする）
+					if item.status_check_timeout.cant_help?
+						item.proceed = false
+						@wait_queue.push(item)
 
+						$logger.WARN("item timeout " + item.id.to_s)
+					else
+						msg = "status " + item.id.to_s
+						item.status_check_timeout.retry
 						@server.send(item.processer, msg)
 					end
 				end
-
-				# 一定時間以上返事を返していない場合，アプリケーションが落ちたと判断する
-				# （ただし，ノード自体が落ちたとは判断をしない．ノードはpingの時間から判定をする）
-				if (Time.now - item.last_status_time) > ITEM_TIMEOUT
-					item.proceed = false
-					@wait_queue.push(item)
-
-					$logger.WARN("item timeout " + item.id.to_s)
-				end
 			end
 
-			if (Time.now - @last_dump_time) > 1
-				@last_dump_time = Time.now
+			if @dump_timeout.expired?
+				@dump_timeout.update
 				DumpItem()
 				DumpNode()
 			end
