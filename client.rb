@@ -44,7 +44,14 @@ class DistssClient
 		@send_count = 0
 
 		$logger.PASS
-		while(line = @file.gets)
+		while(1)
+			print "> "
+			$stdout.flush
+
+			if ((line = @file.gets) == nil)
+				break
+			end
+
 			if @client.lost?
 				$logger.INFO("shutdown client")
 				break
