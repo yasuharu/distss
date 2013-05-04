@@ -177,6 +177,7 @@ class NetworkServer
 			end
 
 			if !connected
+				sleep 0.01
 				next
 			end
 
@@ -271,6 +272,8 @@ class SendThread
 				end
 			end
 
+			sleep 0.01
+
 			if @info.shutdown
 				break
 			end
@@ -313,6 +316,7 @@ class RecvThread
 
 			# メッセージがない場合は繰り返し
 			if !recved
+				sleep 0.01
 				next
 			end
 

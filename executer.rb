@@ -121,6 +121,8 @@ class DistssExecuter
 					@status.status = EXECUTER_ST_NONE
 				end
 			end
+
+			sleep 0.01
 		end
 	end
 end

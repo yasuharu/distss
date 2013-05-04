@@ -57,6 +57,12 @@ class ItemInfo
 	end
 end
 
+class CommandManager
+end
+
+class CommandEntry
+end
+
 # @brief タイムアウトを管理するクラス
 class TimeoutHelper
 	def initialize(timeout, retrymax = 0)
@@ -344,6 +350,8 @@ class DistssServer
 				DumpItem()
 				DumpNode()
 			end
+
+			sleep 0.01
 		end
 
 		@server.close
