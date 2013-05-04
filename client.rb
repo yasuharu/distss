@@ -57,11 +57,13 @@ class DistssClient
 				break
 			end
 
-		$logger.PASS
-			@client.send(line)
+			$logger.PASS
+
+			msg = "add " + line
+			@client.send(msg)
 			@send_count += 1
 
-		$logger.PASS
+			$logger.PASS
 			# バッチモードじゃない場合は，処理待ちをする
 			if !@batch_mode
 				while 1
