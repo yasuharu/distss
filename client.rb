@@ -87,15 +87,13 @@ class DistssClient
 		@recved_count = 0
 		if @batch_mode
 			while @send_count > @recved_count
-				while 1
-					if (result = @player.get()) != nil
-						r = result.gsub("<br>", "\n")
-						print r
-						@recved_count += 1
-					end
-
-					sleep 0.01
+				if (result = @player.get()) != nil
+					r = result.gsub("<br>", "\n")
+					print r
+					@recved_count += 1
 				end
+
+				sleep 0.01
 			end
 		end
 	end
