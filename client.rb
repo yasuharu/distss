@@ -7,6 +7,13 @@ require 'optparse'
 SERVER_PORT = 20000
 SERVER_HOST = "127.0.0.1"
 
+class ReturnMessage
+	attr_accessor :id
+	attr_accessor :msg
+	attr_accessor :command
+	attr_accessor :retcode
+end
+
 class DistssClient
 	def initialize()
 		@command_file = nil
@@ -14,6 +21,17 @@ class DistssClient
 
 	# @brief コマンドファイルを指定．nilだった場合は，標準入力を使用する
 	attr_accessor :command_file
+
+	# @brief コマンドの実行結果を表示
+	def viewret(ret)
+		if ret.retcode != 0
+			# 実際のシェルの戻り値は16ビット中の上位8ビットに格納されている
+			puts "[error] retcode = %d(command = %s)" % [(ret.retcode >> 8), ret.command]
+		end
+
+		r = ret.msg.gsub("<br>", "\n")
+		print r
+	end
 
 	def run()
 		# バッチモードの判定
@@ -40,13 +58,12 @@ class DistssClient
 		@player = DistssProtocolLayer.new(@client)
 		@player.run()
 
-		# 送信した回数と受信する回数は一致することが保証される
-		@send_count = 0
-
 		$logger.PASS
 		while(1)
-			print "> "
-			$stdout.flush
+			if !@batch_mode
+				print "> "
+				$stdout.flush
+			end
 
 			if ((line = @file.gets) == nil)
 				break
@@ -60,8 +77,7 @@ class DistssClient
 			$logger.PASS
 
 			msg = "add " + line
-			@client.send(msg)
-			@send_count += 1
+			@player.send(msg)
 
 			$logger.PASS
 			# バッチモードじゃない場合は，処理待ちをする
@@ -69,8 +85,7 @@ class DistssClient
 				while 1
 					finished = false
 					if (result = @player.get()) != nil
-						r = result.gsub("<br>", "\n")
-						print r
+						viewret(result)
 						finished = true
 					end
 
@@ -84,13 +99,21 @@ class DistssClient
 		end
 
 		# バッチモードの場合は最後に待つ
-		@recved_count = 0
 		if @batch_mode
-			while @send_count > @recved_count
+			finished = false
+			while true
 				if (result = @player.get()) != nil
-					r = result.gsub("<br>", "\n")
-					print r
-					@recved_count += 1
+					viewret(result)
+				end
+
+				if !finished && @player.finished?
+					# もう一度@player.getを実行させるために，finishedフラグを使用する
+					finished = true
+					next
+				end
+
+				if finished
+					break
 				end
 
 				sleep 0.01
@@ -99,11 +122,30 @@ class DistssClient
 	end
 end
 
+# @brief コマンドの実行状態を保持する
+class CommandStatus
+	def initialize(command)
+		@command  = command
+		@finished = false
+	end
+
+	attr_accessor :id
+	attr_accessor :command
+	attr_accessor :finished
+end
+
 class DistssProtocolLayer
 	def initialize(client)
 		@client       = client
 		@recved_mutex = Mutex.new
 		@result_queue = Queue.new
+
+		# IDが未確定のCommandStatusを格納する
+		@unknown_id_queue = Queue.new
+
+		# コマンドを実行結果のリスト
+		# idからCommandStatusを取得する
+		@command_list  = Hash.new
 	end
 
 	def run()
@@ -122,6 +164,36 @@ class DistssProtocolLayer
 		return ret
 	end
 
+	def send(command)
+		@client.send(command)
+
+		st = CommandStatus.new(command)
+		@unknown_id_queue.push(st)
+	end
+
+	def finished?
+		if !@unknown_id_queue.empty?
+			return false
+		end
+
+		@command_list.each do |k,v|
+			if !v.finished
+				return false
+			end
+		end
+
+		return true
+	end
+
+	# @brief command_listの中身をダンプする
+	def dump()
+		puts "===== dump ====="
+		@command_list.each do |k,v|
+			puts "id = %d, status = %s, command = %s" % [v.id, v.finished.to_s, v.command]
+		end
+		puts "====="
+	end
+
 	def run_thread()
 		while true
 			if @client.lost?
@@ -132,21 +204,70 @@ class DistssProtocolLayer
 				msg = @client.recv
 				$logger.INFO(msg)
 
+				# addの返事が返ってきた場合
+				if msg =~ /^addr (\d*)$/
+					# IDが決定したのでcommand_listへ格納する
+					id = $1.to_i
+
+					st = @unknown_id_queue.pop()
+					st.id = id
+
+					@command_list[id] = st
+				end
+
 				# pingで接続確認が来た場合
 				if msg =~ /^ping$/
 					@client.send("pong")
 				end
 
 				# コマンドの結果を見る
-				if msg =~ /^finr (.*)$/
+				if msg =~ /^finr (\d*) (.*)$/
 					# メインのスレッドに結果を渡す
 					@recved_mutex.synchronize do
-						@result_queue.push($1)
+						id      = $1.to_i
+						command = "<unknown>"
+
+						if @command_list.key?(id)
+							command = @command_list[id].command
+							@command_list[id].finished = true
+						else
+							$logger.ERROR("command_list is not found")
+						end
+
+						ret = ReturnMessage.new
+						ret.id      = id
+						ret.msg     = $2
+						ret.retcode = 0
+						ret.command = command
+						@result_queue.push(ret)
+					end
+				end
+
+				if msg =~ /^errr (\d*) (\d*) (.*)$/
+					# メインのスレッドに結果を渡す
+					@recved_mutex.synchronize do
+						id      = $1.to_i
+						command = "<unknown>"
+
+						if @command_list.key?(id)
+							command = @command_list[id].command
+							@command_list[id].finished = true
+						else
+							$logger.ERROR("command_list is not found")
+						end
+
+						ret = ReturnMessage.new
+						ret.id      = id
+						ret.retcode = $2.to_i
+						ret.msg     = $3
+						ret.command = command
+						@result_queue.push(ret)
 					end
 				end
 			end
 
 			sleep 0.01
+
 		end
 	end
 end

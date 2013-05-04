@@ -2,6 +2,10 @@
 require "socket"
 require "network"
 require "flogger"
+require "yaml"
+require "pp"
+
+SETTING_FILENAME = "setting.yaml"
 
 SERVER_PORT = 20000
 SERVER_HOST = "127.0.0.1"
@@ -20,6 +24,8 @@ class ExecuterStatus
 	attr_accessor :run_thread
 
 	attr_accessor :retmsg
+
+	attr_accessor :retcode
 
 	def initialize()
 		@status = EXECUTER_ST_NONE
@@ -98,7 +104,8 @@ class DistssExecuter
 								ret = e
 							end
 
-							@status.retmsg = ret
+							@status.retcode = $?
+							@status.retmsg  = ret
 						}
 					else
 						$logger.WARN("no job")
@@ -115,9 +122,12 @@ class DistssExecuter
 					# デリミタが\nなので実際の改行コードは\rにする
 					msg = @status.retmsg.gsub(/(\r\n|\r|\n)/, '<br>')
 
-#					p msg
+					if @status.retcode == 0
+						@client.send("fin " + @status.id.to_s + " " + msg)
+					else
+						@client.send("err %d %d %s" % [@status.id, @status.retcode, msg])
+					end
 
-					@client.send("fin " + @status.id.to_s + " " + msg)
 					@status.status = EXECUTER_ST_NONE
 				end
 			end
@@ -129,6 +139,10 @@ end
 
 $logger.level = FLogger::LEVEL_DEBUG
 Thread.abort_on_exception = true
+
+# setting = YAML.load(SETTING_FILENAME)
+# p setting
+# exit 1
 
 executer = DistssExecuter.new
 executer.run()

@@ -193,7 +193,7 @@ class DistssServer
 						@item_list.push(i)
 						@wait_queue.push(i)
 
-						reply = i.id.to_s
+						reply = "addr " + i.id.to_s
 					end
 
 					# 動画の取得
@@ -220,7 +220,8 @@ class DistssServer
 
 					# 動画の完了
 					# request : fin <id> <出力メッセージ>
-					# reply   : finr
+					# reply(for executer) : finr <id>
+					# reply(for client) : finr <id> <出力メッセージ>
 					if request =~ /^fin (\d*) (.*)$/m
 						id     = $1.to_i
 						item   = FindItemById(id)
@@ -249,7 +250,7 @@ class DistssServer
 								reply = "finr " + id.to_s
 
 								# 要求を出したノードに返事を返す
-								@server.send(item.requester, "finr " + result)
+								@server.send(item.requester, "finr %d %s" % [id, result])
 							end
 						end
 
@@ -257,13 +258,18 @@ class DistssServer
 					end
 
 					# コマンドのエラー
-					# request : err <id>
-					# reply   : errr
-					if request =~ /^err (.*)/
-						# エラーの場合は状態を差し戻し
-						id    = $1.to_i
-						item  = FindItemById(id)
-						reply = "errr"
+					# request : err <id> <retcode> <msg>
+					# reply(for executer) : errr <id>
+					# reply(for client) : errr <id> <retcode> <msg>
+					if request =~ /^err (\d*) (\d*) (.*)/
+						# @TODO 将来的には，エラーの場合は状態を差し戻し
+						#       現在の実装は，そのまま要求を出したノードにエラーを通知する
+
+						id      = $1.to_i
+						retcode = $2.to_i
+						msg     = $3
+						item    = FindItemById(id)
+						reply   = "errr " + id.to_s
 
 						# @FIXME これ忘れていたらアウト？
 						#        ケアレスミスを減らすためのロジックを考える
@@ -272,8 +278,15 @@ class DistssServer
 							next
 						end
 
-						item.proceed = false
-						@wait_queue.push(item)
+						# 要求を出したノードに返事を返す
+						@server.send(item.requester, "errr %d %d %s" % [id, retcode, result])
+
+						# 終了したので削除
+						@item_list.delete(item)
+
+						# @TODO 将来的に使用する差し戻しのコード
+						# item.proceed = false
+						# @wait_queue.push(item)
 					end
 
 					# ***** クライアントからの返事関係のメッセージ *****
