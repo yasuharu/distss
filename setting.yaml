@@ -1,0 +1,27 @@
+global:
+ server:
+  host: "127.0.0.1"
+  port: 55670
+
+server:
+ timeout:
+  client_timeout:
+   check_time:  5
+   retry_count: 5
+  command_timeout:
+   check_time:  1
+   retry_count: 10
+ debug_dump_time: 1
+
+# LEVEL_DEBUG = 1
+# LEVEL_INFO  = 2
+# LEVEL_WARN  = 3
+# LEVEL_ERROR = 4
+ loglevel: 2
+
+executer:
+ loglevel: 2
+
+client:
+ loglevel: 2
+

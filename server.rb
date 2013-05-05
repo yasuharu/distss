@@ -1,17 +1,8 @@
 
 require "thread"
 require "network"
-
-SERVER_PORT = 20000
-
-CLIENT_CHECK_TIME       = 5
-CLIENT_CHECK_RETRY_TIME = 1
-CLIENT_TIMEOUT          = 30
-
-ITEM_CHECK_TIME  = 1
-ITEM_CHECK_RETRY = 10
-
-DEBUG_DUMP_TIME = 1
+require "yaml"
+require "setting"
 
 class NodeInfo
 	attr_accessor :tinfo
@@ -19,15 +10,11 @@ class NodeInfo
 	# @brief 認証済みかどうか
 	attr_accessor :authed
 
-	# @brief 最終応答確認時刻
-	attr_accessor :last_alive_time
-
-	# @brief 最後にpingを実行した時間
-	#        (あくまでも，実行した時間なので，返事が返ってきた時間ではない)
-	attr_accessor :alive_check_time
+	# @brief 生存チェックのタイムアウトを管理
+	attr_accessor :alive_check_timeout
 end
 
-class ItemInfo
+class CommandInfo
 	# 現在処理中？
 	attr_accessor :proceed
 
@@ -40,7 +27,7 @@ class ItemInfo
 	# 実行中のコマンドを判断するためのID
 	attr_accessor :id
 
-	# 最後にステータスチェックのリクエストを送った時間
+	# ステータスチェックのタイムアウトを管理
 	attr_accessor :status_check_timeout
 
 	# 現在の状況(0 - 100のパーセント値)
@@ -53,7 +40,7 @@ class ItemInfo
 		@command = command
 		@proceed = false
 		@id      = id
-		@status_check_timeout = TimeoutHelper.new(ITEM_CHECK_TIME, ITEM_CHECK_RETRY)
+		@status_check_timeout = TimeoutHelper.new($setting.server.item_check_time, $setting.server.item_check_retry)
 	end
 end
 
@@ -90,11 +77,13 @@ class TimeoutHelper
 	def cant_help?
 		return (@retry_count >= @retrymax)
 	end
+
+	attr_reader :lasttime
 end
 
 class DistssServer
 	def initialize()
-		@server   = NetworkServer.new(SERVER_PORT)
+		@server   = NetworkServer.new($setting.global.port)
 		@shutdown = false
 	end
 
@@ -131,7 +120,7 @@ class DistssServer
 		id = 0
 		$logger.DEBUG("----- node -----")
 		@node_list.each do |node|
-			$logger.DEBUG("id = %d, last_alive_time = %s" % [id, node.private.last_alive_time.to_s])
+			$logger.DEBUG("id = %d, last_alive_time = %s" % [id, node.private.alive_check_timeout.lasttime.to_s])
 			id += 1
 		end
 		$logger.DEBUG("-----")
@@ -140,14 +129,13 @@ class DistssServer
 
 	def onConnect(tinfo)
 		# @FIXME ノード情報をprivateにしないといけないのはどうにかしたい
-		tinfo.private                  = NodeInfo.new
-		tinfo.private.authed           = false
-		tinfo.private.last_alive_time  = Time.now
-		tinfo.private.alive_check_time = Time.now
+		tinfo.private                     = NodeInfo.new
+		tinfo.private.authed              = false
+		tinfo.private.alive_check_timeout = TimeoutHelper.new($setting.server.client_check_time, $setting.server.client_check_retry)
 	end
 
 	def run()
-		$logger.INFO("create ServerControllerThread")
+		$logger.DEBUG("create ServerControllerThread")
 
 		# サーバのスレッドを開始する
 		@server.onConnect = self.method(:onConnect)
@@ -160,7 +148,7 @@ class DistssServer
 		@wait_queue = Queue.new
 		@id_count   = 1
 
-		@dump_timeout = TimeoutHelper.new(DEBUG_DUMP_TIME)
+		@dump_timeout = TimeoutHelper.new($setting.server.debug_dump_time)
 		while true
 			if @shutdown
 				break
@@ -169,7 +157,7 @@ class DistssServer
 			@node_list.each do |node|
 				while @server.recv?(node)
 					# 最終応答時間を修正
-					node.private.last_alive_time = Time.now
+					node.private.alive_check_timeout.update
 
 					request = @server.recv(node)
 					reply   = nil
@@ -185,7 +173,7 @@ class DistssServer
 					# request : add <コマンド文字列>
 					# reply   : addr <id>
 					if request =~ /^add (.*)$/
-						i           = ItemInfo.new($1, @id_count)
+						i           = CommandInfo.new($1, @id_count)
 						i.requester = node
 
 						@id_count += 1
@@ -292,7 +280,7 @@ class DistssServer
 					# ***** クライアントからの返事関係のメッセージ *****
 
 					if request =~ /pong/
-						# すでに last_alive_time は更新されているので特に何もしない
+						node.private.alive_check_timeout.update
 					end
 
 					# ステータス確認
@@ -319,18 +307,15 @@ class DistssServer
 				end
 
 				# クライアントが一定時間通信のない場合 ping を送信
-				if (Time.now - node.private.last_alive_time) > CLIENT_CHECK_TIME
-					# 最後に ping を送った時から一定時間後に再送信
-					if (Time.now - node.private.alive_check_time) > CLIENT_CHECK_RETRY_TIME
-						node.private.alive_check_time = Time.now
+				if node.private.alive_check_timeout.expired?
+					if node.private.alive_check_timeout.cant_help?
+						# クライアントの接続がタイムアウトした場合
+						$logger.WARN(" ****** connection timeout *****")
+						@server.disconnect(node)
+					else
+						# リトライ
 						@server.send(node, "ping")
 					end
-				end
-
-				# クライアントの接続がタイムアウトした場合
-				if (Time.now - node.private.last_alive_time) > CLIENT_TIMEOUT
-					$logger.WARN(" ****** connection timeout *****")
-					@server.disconnect(node)
 				end
 			end
 
@@ -369,16 +354,17 @@ class DistssServer
 
 		@server.close
 
-		$logger.INFO("end ServerControllerThread")
+		$logger.DEBUG("end ServerControllerThread")
 	end
 end
 
-$logger.level = FLogger::LEVEL_DEBUG
-$logger.tag   = "server"
-Thread.abort_on_exception = true
-
 if __FILE__ == $PROGRAM_NAME
-	puts " ***** INIT ****"
+	$logger.level = $setting.server.loglevel
+	$logger.tag   = "server"
+
+	# デバッグ用に必ずスレッド内での例外を補足する
+	Thread.abort_on_exception = true
+
 	server = DistssServer.new()
 	server.run()
 end
