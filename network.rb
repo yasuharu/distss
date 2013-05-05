@@ -104,7 +104,7 @@ class NetworkServer
 			return
 		end
 
-		# @FIXME
+		# @FIXME シャットダウンフラグに任せないといけないのは，ケアレスミスのもとだと思う
 		@shutdown = true
 
 		# @brief スレッドを止める
@@ -247,7 +247,7 @@ class SendThread
 	end
 
 	def run()
-		$logger.INFO("create SendThread")
+		$logger.DEBUG("create SendThread")
 
 		while true
 			# メッセージの送信チェック
@@ -281,7 +281,7 @@ class SendThread
 
 		@info.shutdown = true
 
-		$logger.INFO("destroy SendThread")
+		$logger.DEBUG("destroy SendThread")
 	end
 end
 
@@ -291,7 +291,7 @@ class RecvThread
 	end
 
 	def run()
-		$logger.INFO("create RecvThread")
+		$logger.DEBUG("create RecvThread")
 
 		# 最後に受信してデリミタに達しなかった文字列
 		last_message = ""
@@ -359,6 +359,6 @@ class RecvThread
 
 		@info.shutdown = true
 
-		$logger.INFO("destroy RecvThread")
+		$logger.DEBUG("destroy RecvThread")
 	end
 end

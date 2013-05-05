@@ -2,13 +2,7 @@
 require "socket"
 require "network"
 require "flogger"
-require "yaml"
-require "pp"
-
-SETTING_FILENAME = "setting.yaml"
-
-SERVER_PORT = 20000
-SERVER_HOST = "127.0.0.1"
+require "setting"
 
 EXECUTER_ST_NONE     = 1
 EXECUTER_ST_GET_WAIT = 2
@@ -40,7 +34,7 @@ class DistssExecuter
 	def run()
 		$logger.INFO("connect server begin")
 
-		@client = NetworkClient.new(SERVER_HOST, SERVER_PORT)
+		@client = NetworkClient.new($setting.global.host, $setting.global.port)
 
 		@status        = ExecuterStatus.new
 		@status.status = EXECUTER_ST_NONE
@@ -108,7 +102,7 @@ class DistssExecuter
 							@status.retmsg  = ret
 						}
 					else
-						$logger.WARN("no job")
+						$logger.DEBUG("no job")
 						@status.status = EXECUTER_ST_NONE
 
 						sleep 1
@@ -137,13 +131,14 @@ class DistssExecuter
 	end
 end
 
-$logger.level = FLogger::LEVEL_DEBUG
-Thread.abort_on_exception = true
+if __FILE__ == $PROGRAM_NAME
+	$logger.level = $setting.executer.loglevel
+	$logger.tag   = "executer"
 
-# setting = YAML.load(SETTING_FILENAME)
-# p setting
-# exit 1
+	# デバッグ用に必ずスレッド内での例外を補足する
+	Thread.abort_on_exception = true
 
-executer = DistssExecuter.new
-executer.run()
+	executer = DistssExecuter.new
+	executer.run()
+end
 

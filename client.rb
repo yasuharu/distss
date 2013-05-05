@@ -3,16 +3,7 @@ require "socket"
 require "network"
 require "flogger"
 require 'optparse'
-
-SERVER_PORT = 20000
-SERVER_HOST = "127.0.0.1"
-
-class ReturnMessage
-	attr_accessor :id
-	attr_accessor :msg
-	attr_accessor :command
-	attr_accessor :retcode
-end
+require "setting"
 
 class DistssClient
 	def initialize()
@@ -47,7 +38,7 @@ class DistssClient
 			end
 		end
 
-		@client = NetworkClient.new(SERVER_HOST, SERVER_PORT)
+		@client = NetworkClient.new($setting.global.host, $setting.global.port)
 		if(!@client.connect)
 			$logger.ERROR("failed to connect server")
 			return
@@ -134,6 +125,16 @@ class CommandStatus
 	attr_accessor :finished
 end
 
+# @brief コマンドの実行結果を保持する
+class CommandResult
+	attr_accessor :id
+	attr_accessor :msg
+	attr_accessor :command
+	attr_accessor :retcode
+end
+
+# @brief Distssの低レイヤーの部分を処理する
+#        上のレイヤーでは，コマンドの実行やその結果の表示のみを行うようにする
 class DistssProtocolLayer
 	def initialize(client)
 		@client       = client
@@ -202,7 +203,7 @@ class DistssProtocolLayer
 
 			if @client.recv?
 				msg = @client.recv
-				$logger.INFO(msg)
+				$logger.DEBUG(msg)
 
 				# addの返事が返ってきた場合
 				if msg =~ /^addr (\d*)$/
@@ -234,7 +235,7 @@ class DistssProtocolLayer
 							$logger.ERROR("command_list is not found")
 						end
 
-						ret = ReturnMessage.new
+						ret = CommandResult.new
 						ret.id      = id
 						ret.msg     = $2
 						ret.retcode = 0
@@ -256,7 +257,7 @@ class DistssProtocolLayer
 							$logger.ERROR("command_list is not found")
 						end
 
-						ret = ReturnMessage.new
+						ret = CommandResult.new
 						ret.id      = id
 						ret.retcode = $2.to_i
 						ret.msg     = $3
@@ -272,17 +273,19 @@ class DistssProtocolLayer
 	end
 end
 
-$logger.level = FLogger::LEVEL_ERROR
-$logger.tag   = "client"
+if __FILE__ == $PROGRAM_NAME
+	$logger.level = $setting.client.loglevel
+	$logger.tag   = "client"
 
-Thread.abort_on_exception = true
+	# デバッグ用に必ずスレッド内での例外を補足する
+	Thread.abort_on_exception = true
+	client = DistssClient.new
 
-client = DistssClient.new
+	# 引数の解析
+	opt = OptionParser.new
+	opt.on("-c CommandFile") { |v| client.command_file = v }
+	opt.parse(ARGV)
 
-# 引数の解析
-opt = OptionParser.new
-opt.on("-c CommandFile") { |v| client.command_file = v }
-opt.parse(ARGV)
-
-client.run()
+	client.run()
+end
 
