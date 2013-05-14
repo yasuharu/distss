@@ -3,10 +3,13 @@ require "socket"
 require "network"
 require "flogger"
 require "setting"
+require 'optparse'
 
 EXECUTER_ST_NONE     = 1
 EXECUTER_ST_GET_WAIT = 2
 EXECUTER_ST_RUNNING  = 3
+
+PID_FILE = "executer.pid"
 
 class ExecuterStatus
 	attr_accessor :status
@@ -137,6 +140,33 @@ if __FILE__ == $PROGRAM_NAME
 
 	# デバッグ用に必ずスレッド内での例外を補足する
 	Thread.abort_on_exception = true
+
+	# 引数の解析
+	daemon_opt = ""
+	opt = OptionParser.new
+	opt.on("--start") { |v| daemon_opt = "start" }
+	opt.on("--stop")  { |v| daemon_opt = "stop"  }
+	opt.parse(ARGV)
+
+	# サーバの制御
+	daemon = Daemon.new(PID_FILE)
+	if daemon_opt == "start"
+		if daemon.start == -2
+			puts "[ERROR] server already running."
+			exit 1
+		else
+			puts "[INFO] running as daemon."
+		end
+	elsif daemon_opt == "stop"
+		if daemon.stop == -2
+			puts "[ERROR] server not running."
+			exit 1
+		else
+			puts "[INFO] server stop."
+		end
+
+		exit 0
+	end
 
 	executer = DistssExecuter.new
 	executer.run()

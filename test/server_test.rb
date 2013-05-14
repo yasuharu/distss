@@ -5,24 +5,14 @@ require 'network'
 require "flogger"
 require "server"
 
-SERVER_PORT = 20001
+SERVER_PORT = 55670
 
-CLIENT_CHECK_TIME       = 1
-CLIENT_CHECK_RETRY_TIME = 1
-CLIENT_TIMEOUT          = 2
-
-ITEM_CHECK_TIME       = 1
-ITEM_CHECK_RETRY_TIME = 1
-ITEM_TIMEOUT          = 2
-
-class NetworkTest < Test::Unit::TestCase
+class ServerTest < Test::Unit::TestCase
 	def setup
 		Thread.abort_on_exception = true
-
-		@server = DistssServer.new()
-		@server_thread = Thread.new { @server.run }
-
 		$logger.level = FLogger::LEVEL_DEBUG
+
+		system "ruby server.rb --start"
 
 		# 意図的にconnectしておいて，サーバ側には複数のノードがあるように振る舞う
 		connect()
@@ -59,6 +49,7 @@ class NetworkTest < Test::Unit::TestCase
 	# @brief メッセージのエコーテスト
 	def test_send_recv_message
 		client = connect()
+		assert_not_equal(client, nil)
 
 		send(client, "echo hoge")
 		send(client, "echo hoge")
@@ -254,8 +245,8 @@ class NetworkTest < Test::Unit::TestCase
 
 	def teardown
 		puts " * server close"
-		@server.close
-		@server_thread.join
+
+		system "ruby server.rb --stop"
 	end
 end
 

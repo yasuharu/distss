@@ -30,7 +30,7 @@ class NetworkClient
 			$logger.INFO("connect to server begin")
 			server_ip = Resolv.getaddress(@host)
 
-			$logger.DEBUG("connecting to " + @host + "(" + server_ip + ")")
+			$logger.DEBUG("connecting to " + @host + ":" + @port.to_s + "(" + server_ip + ")")
 			@socket = TCPSocket.open(server_ip, @port)
 		rescue => e
 			$logger.ERROR(e)

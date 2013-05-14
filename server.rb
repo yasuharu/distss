@@ -3,6 +3,10 @@ require "thread"
 require "network"
 require "yaml"
 require "setting"
+require "daemon"
+require 'optparse'
+
+PID_FILE = "server.pid"
 
 class NodeInfo
 	attr_accessor :tinfo
@@ -364,6 +368,33 @@ if __FILE__ == $PROGRAM_NAME
 
 	# デバッグ用に必ずスレッド内での例外を補足する
 	Thread.abort_on_exception = true
+
+	# 引数の解析
+	daemon_opt = ""
+	opt = OptionParser.new
+	opt.on("--start") { |v| daemon_opt = "start" }
+	opt.on("--stop")  { |v| daemon_opt = "stop"  }
+	opt.parse(ARGV)
+
+	# サーバの制御
+	daemon = Daemon.new(PID_FILE)
+	if daemon_opt == "start"
+		if daemon.start == -2
+			puts "[ERROR] server already running."
+			exit 1
+		else
+			puts "[INFO] running as daemon."
+		end
+	elsif daemon_opt == "stop"
+		if daemon.stop == -2
+			puts "[ERROR] server not running."
+			exit 1
+		else
+			puts "[INFO] server stop."
+		end
+
+		exit 0
+	end
 
 	server = DistssServer.new()
 	server.run()
