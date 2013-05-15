@@ -315,10 +315,13 @@ class DistssServer
 					if node.private.alive_check_timeout.cant_help?
 						# クライアントの接続がタイムアウトした場合
 						$logger.WARN(" ****** connection timeout *****")
+						@server.send(node, "timeout")
 						@server.disconnect(node)
 					else
 						# リトライ
 						@server.send(node, "ping")
+
+						# @FIXME 連続で大量にtimeoutを投げる可能性がある
 					end
 				end
 			end
