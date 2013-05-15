@@ -1,4 +1,6 @@
 
+$:.unshift(File.dirname(File.expand_path(__FILE__)))
+
 # @brief フォーマット付きのロガー
 class FLogger
 	def initialize()
