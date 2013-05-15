@@ -4,6 +4,7 @@ require "network"
 require "flogger"
 require "setting"
 require 'optparse'
+require "daemon"
 
 EXECUTER_ST_NONE     = 1
 EXECUTER_ST_GET_WAIT = 2
