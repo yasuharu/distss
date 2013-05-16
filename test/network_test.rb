@@ -1,6 +1,8 @@
 
 $:.unshift(File.dirname(File.expand_path(__FILE__)))
+$:.unshift(File.dirname(File.expand_path(__FILE__)) + "/../")
 
+require "rubygems"
 require "thread"
 require 'test/unit'
 require 'network'

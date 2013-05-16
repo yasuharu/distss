@@ -1,5 +1,6 @@
 
 $:.unshift(File.dirname(File.expand_path(__FILE__)))
+$:.unshift(File.dirname(File.expand_path(__FILE__)) + "/../")
 
 require "thread"
 require 'test/unit'
@@ -139,7 +140,12 @@ class ServerTest < Test::Unit::TestCase
 
 		# すぐに返事を返して，タイムアウトしないか？
 		client.send("pong")
-		assert_equal("ping", recv(client))
+		while client.recv?
+			msg = client.recv
+			if !(msg == "ping" || msg == "none")
+				assert(false)
+			end
+		end
 
 		sleep ($setting.server.client_check_time * $setting.server.client_check_retry + 1)
 

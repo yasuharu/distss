@@ -317,7 +317,6 @@ class DistssServer
 					if node.private.alive_check_timeout.cant_help?
 						# クライアントの接続がタイムアウトした場合
 						$logger.WARN(" ****** connection timeout *****")
-						@server.send(node, "timeout")
 						@server.disconnect(node)
 					else
 						# リトライ
