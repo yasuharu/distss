@@ -17,6 +17,9 @@ class NetworkTest < Test::Unit::TestCase
 		@server = NetworkServer.new(SERVER_PORT)
 		$logger.level = FLogger::LEVEL_DEBUG
 		Thread.new { @server.run }
+
+		# 開始直後だとサーバが立ち上がっていない可能性がある
+		sleep 0.1
 	end
 
 	# 補助用の関数
