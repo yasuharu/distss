@@ -1,19 +1,26 @@
 
 TARGET_PATH="./test/batch"
+RUBY="ruby"
+
+if [ $# -eq 1 ]; then
+	RUBY=$1
+fi
+echo $RUBY
+
 for file in `ls $TARGET_PATH`
 do
-	ruby server.rb --start
-	ruby executer.rb --start
+	$RUBY server.rb --start
+	$RUBY executer.rb --start
 
 	# 異常終了したら終わる
-	ruby client.rb -c $TARGET_PATH/$file
+	$RUBY client.rb -c $TARGET_PATH/$file
 	if [ $? -ne 0 ]; then
-		ruby executer.rb --stop
-		ruby server.rb --stop
+		$RUBY executer.rb --stop
+		$RUBY server.rb --stop
 		exit 1
 	fi
 
-	ruby executer.rb --stop
-	ruby server.rb --stop
+	$RUBY executer.rb --stop
+	$RUBY server.rb --stop
 done
 
