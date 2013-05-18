@@ -105,7 +105,7 @@ class DistssExecuter
 							end
 
 							@status.retcode = $?
-							@status.retmsg  = ret
+							@status.retmsg  = ret.to_s
 						}
 					else
 						$logger.DEBUG("no job")
