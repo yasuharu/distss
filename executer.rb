@@ -155,17 +155,17 @@ if __FILE__ == $PROGRAM_NAME
 	daemon = Daemon.new(PID_FILE)
 	if daemon_opt == "start"
 		if daemon.start == -2
-			puts "[ERROR] server already running."
+			puts "[ERROR] executer already running."
 			exit 1
 		else
 			puts "[INFO] running as daemon."
 		end
 	elsif daemon_opt == "stop"
 		if daemon.stop == -2
-			puts "[ERROR] server not running."
+			puts "[ERROR] executer not running."
 			exit 1
 		else
-			puts "[INFO] server stop."
+			puts "[INFO] executer stop."
 		end
 
 		exit 0
