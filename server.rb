@@ -47,6 +47,7 @@ class CommandInfo
 		@proceed = false
 		@id      = id
 		@status_check_timeout = TimeoutHelper.new($setting.server.item_check_time, $setting.server.item_check_retry)
+		@percentage = 0
 	end
 end
 
@@ -117,7 +118,7 @@ class DistssServer
 		$logger.DEBUG("----- dump -----")
 		@item_list.each do |item|
 			$logger.DEBUG("id = %d, command = %s, st = %s, percentage = %d" %
-				[item.id.to_s, item.command, item.proceed.to_s, item.percentage])
+				[item.id, item.command, item.proceed.to_s, item.percentage])
 		end
 		$logger.DEBUG("-----")
 	end
