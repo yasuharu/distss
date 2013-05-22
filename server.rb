@@ -322,6 +322,7 @@ class DistssServer
 					else
 						# リトライ
 						@server.send(node, "ping")
+						node.private.alive_check_timeout.retry
 
 						# @FIXME 連続で大量にtimeoutを投げる可能性がある
 					end
