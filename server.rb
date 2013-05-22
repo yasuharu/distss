@@ -86,6 +86,7 @@ class TimeoutHelper
 	end
 
 	attr_reader :lasttime
+	attr_reader :retry_count
 end
 
 class DistssServer
@@ -115,7 +116,7 @@ class DistssServer
 	end
 
 	def DumpItem()
-		$logger.DEBUG("----- dump -----")
+		$logger.DEBUG("----- item(count : %d) -----" % @item_list.size)
 		@item_list.each do |item|
 			$logger.DEBUG("id = %d, command = %s, st = %s, percentage = %d" %
 				[item.id, item.command, item.proceed.to_s, item.percentage])
@@ -125,9 +126,9 @@ class DistssServer
 
 	def DumpNode()
 		id = 0
-		$logger.DEBUG("----- node -----")
+		$logger.DEBUG("----- node(count : %d) -----" % @node_list.size)
 		@node_list.each do |node|
-			$logger.DEBUG("id = %d, last_alive_time = %s" % [id, node.private.alive_check_timeout.lasttime.to_s])
+			$logger.DEBUG("id = %d, last_alive_time = %s, retry = %d" % [id, node.private.alive_check_timeout.lasttime.to_s, node.private.alive_check_timeout.retry_count])
 			id += 1
 		end
 		$logger.DEBUG("-----")

@@ -91,9 +91,9 @@ class FLogger
 
 	def output(msg, level)
 		if @tag
-			@file.write("[%s] [%s] %s\n" % [level, @tag, msg])
+			@file.write("[%s] [%s] [%s] %s\n" % [level, Time.now.to_s, @tag, msg])
 		else
-			@file.write("[%s] %s\n" % [level, msg])
+			@file.write("[%s] [%s] %s\n" % [level, Time.now.to_s, msg])
 		end
 	end
 end
