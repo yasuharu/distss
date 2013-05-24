@@ -73,7 +73,7 @@ class DistssClient
 
 			$logger.PASS
 
-			msg = "add " + line
+			msg = "add " + line.strip
 			@player.send(msg)
 
 			$logger.PASS
