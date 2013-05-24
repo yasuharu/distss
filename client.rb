@@ -51,6 +51,10 @@ class DistssClient
 		@player = DistssProtocolLayer.new(@client)
 		@player.run()
 
+		if !@batch_mode
+			puts "--- welcome to distss console. ---"
+		end
+
 		$logger.PASS
 		while(1)
 			if !@batch_mode
