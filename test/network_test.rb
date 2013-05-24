@@ -35,10 +35,6 @@ class NetworkTest < Test::Unit::TestCase
 		end
 	end
 
-	def send(client, msg)
-		client.send(msg)
-	end
-
 	def recv(client)
 		while(!client.recv?)
 			sleep 0.01
