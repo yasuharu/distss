@@ -1,7 +1,7 @@
 
 $:.unshift(File.dirname(File.expand_path(__FILE__)))
 
-# @brief フォーマット付きのロガー
+# @brief コンソールでのログ表示やファイル出力などの高機能ロガー
 class FLogger
 	def initialize()
 		@file   = STDOUT
@@ -30,7 +30,7 @@ class FLogger
 		@file = open(file, "a")
 	end
 
-	# @brief �\����W���o�͂Ƀ~���[����
+	# @brief 表示を標準出力にミラーする
 	def SetMirrorMode(value)
 		@mirror = value
 	end
@@ -89,13 +89,13 @@ class FLogger
 		console_output COLOR_DEFAULT
 	end
 
-	# @brief STDOUT, STDERR���o�͐�̏ꍇ�̂ݕ\��������
+	# @brief STDOUT, STDERRが出力先の場合のみ表示をする
 	def console_output(msg)
 		if STDOUT == @file || STDERR == @file
 			print msg
 		end
 
-		# �~���[�o�͂̏ꍇ
+		# ミラー出力の場合
 		if STDOUT != @file && @mirror
 			STDOUT.write(msg)
 		end
@@ -112,7 +112,7 @@ class FLogger
 
 		@file.write(output)
 
-		# �~���[�o�͂̏ꍇ
+		# ミラー出力の場合
 		if STDOUT != @file && @mirror
 			STDOUT.write(output)
 			STDOUT.flush
