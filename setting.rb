@@ -68,17 +68,29 @@ class Setting
 			if setting["server"].key? "loglevel"
 				@server.loglevel = setting["server"]["loglevel"]
 			end
+
+			if setting["server"].key? "logfile"
+				@server.logfile = setting["server"]["logfile"]
+			end
 		end
 
 		if setting.key? "client"
 			if setting["client"].key? "loglevel"
 				@client.loglevel = setting["client"]["loglevel"]
 			end
+
+			if setting["client"].key? "logfile"
+				@client.logfile = setting["client"]["logfile"]
+			end
 		end
 
 		if setting.key? "executer"
 			if setting["executer"].key? "loglevel"
 				@executer.loglevel = setting["executer"]["loglevel"]
+			end
+
+			if setting["executer"].key? "logfile"
+				@executer.logfile = setting["executer"]["logfile"]
 			end
 		end
 	end
@@ -97,9 +109,11 @@ class Setting
 	class Client
 		def initialize()
 			@loglevel = FLogger::LEVEL_INFO
+			@logfile  = nil
 		end
 
 		attr_accessor :loglevel
+		attr_accessor :logfile
 	end
 
 	attr_reader :server
@@ -111,6 +125,7 @@ class Setting
 			@item_check_retry   = 5
 			@debug_dump_time    = 1
 			@loglevel           = FLogger::LEVEL_INFO
+			@logfile            = nil
 		end
 
 		attr_accessor :client_check_time
@@ -119,15 +134,18 @@ class Setting
 		attr_accessor :item_check_retry
 		attr_accessor :debug_dump_time
 		attr_accessor :loglevel
+		attr_accessor :logfile
 	end
 
 	attr_reader :executer
 	class Executer
 		def initialize()
 			@loglevel = FLogger::LEVEL_INFO
+			@logfile  = nil
 		end
 
 		attr_accessor :loglevel
+		attr_accessor :logfile
 	end
 end
 

@@ -4,9 +4,10 @@ $:.unshift(File.dirname(File.expand_path(__FILE__)))
 # @brief 繝輔か繝ｼ繝槭ャ繝井ｻ倥″縺ｮ繝ｭ繧ｬ繝ｼ
 class FLogger
 	def initialize()
-		@file  = STDOUT
-		@level = LEVEL_INFO
-		@tag   = nil
+		@file   = STDOUT
+		@level  = LEVEL_INFO
+		@tag    = nil
+		@mirror = false
 	end
 
 	COLOR_DEFAULT = "\033[39m"
@@ -23,9 +24,15 @@ class FLogger
 
 	attr_accessor :level
 	attr_accessor :tag
+	attr_accessor :file
 
 	def SetOutput(file)
 		@file = open(file, "a")
+	end
+
+	# @brief 表示を標準出力にミラーする
+	def SetMirrorMode(value)
+		@mirror = value
 	end
 
 	def DEBUG(msg)
@@ -87,14 +94,31 @@ class FLogger
 		if STDOUT == @file || STDERR == @file
 			print msg
 		end
+
+		# ミラー出力の場合
+		if STDOUT != @file && @mirror
+			STDOUT.write(msg)
+		end
 	end
 
 	def output(msg, level)
+		output = ""
+
 		if @tag
-			@file.write("[%s] [%s] [%s] %s\n" % [level, Time.now.to_s, @tag, msg])
+			output = "[%s] [%s] [%s] %s\n" % [level, Time.now.to_s, @tag, msg]
 		else
-			@file.write("[%s] [%s] %s\n" % [level, Time.now.to_s, msg])
+			output = "[%s] [%s] %s\n" % [level, Time.now.to_s, msg]
 		end
+
+		@file.write(output)
+
+		# ミラー出力の場合
+		if STDOUT != @file && @mirror
+			STDOUT.write(output)
+			STDOUT.flush
+		end
+
+		@file.flush
 	end
 end
 

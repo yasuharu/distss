@@ -373,6 +373,12 @@ if __FILE__ == $PROGRAM_NAME
 	$logger.level = $setting.server.loglevel
 	$logger.tag   = "server"
 
+	# daemonになる前にファイルを開かないと，カレントディレクトリが変わってしまい
+	# 相対パスでの参照ができなくなってしまう
+	if $setting.server.logfile
+		$logger.SetOutput($setting.server.logfile)
+	end
+
 	# デバッグ用に必ずスレッド内での例外を補足する
 	Thread.abort_on_exception = true
 
@@ -384,6 +390,7 @@ if __FILE__ == $PROGRAM_NAME
 	opt.parse(ARGV)
 
 	# サーバの制御
+	is_daemon = false
 	daemon = Daemon.new(PID_FILE)
 	if daemon_opt == "start"
 		if daemon.start == -2
@@ -391,6 +398,7 @@ if __FILE__ == $PROGRAM_NAME
 			exit 1
 		else
 			puts "[INFO] running as daemon."
+			is_daemon = true
 		end
 	elsif daemon_opt == "stop"
 		if daemon.stop == -2
@@ -401,6 +409,17 @@ if __FILE__ == $PROGRAM_NAME
 		end
 
 		exit 0
+	end
+
+	# daemonの標準出力をログファイルへ（エラーなども出力される）
+	if is_daemon && $setting.server.logfile
+		daemon.SetLogFd($logger.file)
+	end
+
+	# daemonモードではなく，ログをファイルに出力している時には
+	# 同じ内容を標準出力へミラーする
+	if false == is_daemon && $setting.server.logfile
+		$logger.SetMirrorMode(true)
 	end
 
 	server = DistssServer.new()

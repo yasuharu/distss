@@ -283,6 +283,10 @@ if __FILE__ == $PROGRAM_NAME
 	$logger.level = $setting.client.loglevel
 	$logger.tag   = "client"
 
+	if $setting.client.logfile
+		$logger.SetOutput($setting.client.logfile)
+	end
+
 	# デバッグ用に必ずスレッド内での例外を補足する
 	Thread.abort_on_exception = true
 	client = DistssClient.new

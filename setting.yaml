@@ -17,11 +17,14 @@ server:
 # LEVEL_INFO  = 2
 # LEVEL_WARN  = 3
 # LEVEL_ERROR = 4
- loglevel: 2
+ loglevel: 1
+ logfile: "server.log"
 
 executer:
- loglevel: 2
+ loglevel: 1
+ logfile:  "executer.log"
 
 client:
- loglevel: 2
+ loglevel: 1
+ logfile:  "client.log"
 

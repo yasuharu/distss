@@ -96,12 +96,18 @@ class Daemon
 
 		@log = File.new(@log_file, "a")
 
-		# デーモンがフォルダを
+		# デーモンがフォルダのハンドルを保持したままにしないように，/へ移動する
 		Dir.chdir("/")
 
 		STDIN.reopen  "/dev/null"
 		STDOUT.reopen @log
 		STDERR.reopen @log
+	end
+
+	def SetLogFd(fd)
+		STDIN.reopen  "/dev/null"
+		STDOUT.reopen fd
+		STDERR.reopen fd
 	end
 
 	# @brief デーモンプロセスを終了する
