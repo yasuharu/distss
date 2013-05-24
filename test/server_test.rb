@@ -36,10 +36,6 @@ class ServerTest < Test::Unit::TestCase
 		end
 	end
 
-	def send(client, msg)
-		client.send(msg)
-	end
-
 	def recv(client)
 		while(!client.recv?)
 			sleep 0.01
@@ -54,9 +50,9 @@ class ServerTest < Test::Unit::TestCase
 		client = connect()
 		assert_not_equal(client, nil)
 
-		send(client, "echo hoge")
-		send(client, "echo hoge")
-		send(client, "echo hoge")
+		client.send("echo hoge")
+		client.send("echo hoge")
+		client.send("echo hoge")
 		ret = recv(client)
 		assert_equal("hoge", ret)
 	end
