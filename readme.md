@@ -9,7 +9,7 @@ The Japanese document is [here](http://yasuharu.net/blog/2013/06/distss-introduc
 
 ***
 
-"distss" は分散コマンド実行システムです．簡単に分散してコマンドを高速に実行できます．
+"distss" は分散コマンド管理システムです．簡単に分散してコマンドを高速に実行できます．
 
 日本語のドキュメントは[こちら](http://yasuharu.net/blog/2013/06/distss-introduce.html)をご覧ください．
 
