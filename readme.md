@@ -1,9 +1,9 @@
 distss
 ======
 
-This software is "distss".
-Now writing this document. Please wait...
+!(./docs/distss.png)
+"distss" is a distributed command execution system. You can use easily and quickly end the command by many node.
 
-日本語の説明はこちらをごらんください．
-http://yasuharu.net
+The Japanese document is [here][http://yasuharu.net/blog/2013/06/distss-introduce.html]. English document is now writing... Please wait.
+日本語のドキュメントは[こちら][http://yasuharu.net/blog/2013/06/distss-introduce.html]
 
